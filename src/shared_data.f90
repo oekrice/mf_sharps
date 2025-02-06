@@ -109,6 +109,7 @@ MODULE shared_data
     REAL(num), DIMENSION(:,:), ALLOCATABLE:: surf_vx, surf_vy, surf_vz
     REAL(num), DIMENSION(:,:), ALLOCATABLE:: surf_ex, surf_ey
     REAL(num), DIMENSION(:), ALLOCATABLE:: mag_times
+    REAL(num):: max_velocity
 
 !*******************************************************************************
 END MODULE shared_data

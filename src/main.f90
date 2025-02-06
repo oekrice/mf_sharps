@@ -18,7 +18,7 @@ PROGRAM main
     !REAL(num):: mag_interval
     ! Put some of the major variables in here - things that can be changed occasionally but not in a series of runs
     cfl  = 0.1
-    mf_delta = 1D-1
+    mf_delta = 1D-3
 
     ! Import the parameters and set up the grid
     CALL initialise()
@@ -66,7 +66,6 @@ PROGRAM main
         diag_ideal_time = diag_num*tmax/ndiags
 
         do n = 0, nt-1  ! Actually run the code
-
             CALL timestep()  !Does everything except the actual timestep (for diagnostic reasons)
             !Check whether diagnostics or a snapshot is necessary
             if (t - block_dt < diag_ideal_time .and. t .ge. diag_ideal_time) then
@@ -88,6 +87,13 @@ PROGRAM main
         CALL export_magnetogram(block_num+1)
         CALL save_snap(block_num+1)
 
+        if (t - block_dt < diag_ideal_time .and. t .ge. diag_ideal_time) then
+            CALL diagnostics(diag_num, first_diagnostic)
+            diag_num = diag_num + 1
+            diag_ideal_time = diag_num*tmax/ndiags
+            first_diagnostic = .false.
+        end if
+
         if (proc_num == 0) print*, 'Snap saved', block_num+1, t
 
     end do
@@ -102,7 +108,7 @@ PROGRAM main
 
     !CALL diagnostics(ndiags-1)
     end if
-    if (proc_num == 0 .and. mag_max == 500) print*, 'Fortran code completed sucessfully. Carry on.'
+    !if (proc_num == 0 .and. mag_max == 500) print*, 'Fortran code completed sucessfully. Carry on.'
     CALL mpi_finalize(ierr)
     STOP
 

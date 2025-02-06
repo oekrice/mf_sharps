@@ -173,6 +173,7 @@ SUBROUTINE diagnostics(diag_num, first_diagnostic)
     bx_slice = 0.0_num
     bx_slice(1+nz*z_rank:nz*(z_rank + 1)) = bx0_global(x_target, y_target, 1+nz*z_rank:nz*(z_rank + 1))
 
+    lf_heights = 0.0_num
     do k = 1, nz
         lf_heights(k + nz*z_rank) = sum(l0_global(:, :, k + nz*z_rank))
     end do
@@ -184,8 +185,7 @@ SUBROUTINE diagnostics(diag_num, first_diagnostic)
 
     end do
 
-
-    if (proc_num == 0) then
+    if (proc_num == -1) then
         !DO ROPE HEIGHT
         !Take the slice of relevance
         !bx_slice(1:nz_global) = bx0_global(nx_global/2, ny_global/2, 1:nz_global)

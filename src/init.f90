@@ -282,11 +282,8 @@ SUBROUTINE calculate_timestep()
     dt_ideal = cfl*dt_ideal
     !print*, 'Ideal dt', dt_ideal
 
-    !Adjust so there are an integer number of timesteps in between plots
-    plot_dt = tmax/(ndiags-1)
-    nt = int(ndiags-1)*(int((plot_dt-1d-6)/dt_ideal)+1)
-    nt_ft = dble(nt)
-    dt = tmax/float(nt)
+    dt = dt_ideal
+
     !print*, 'Final dt', dt, ', total timesteps', nt, ', ', int(nt/(nplots-1)), 'per snapshot'
     end if
 
@@ -296,6 +293,8 @@ SUBROUTINE calculate_timestep()
     nt = int(nt_ft)
 
     call MPI_Barrier(comm,ierr)  !Wait for t to be broadcast everywhere.
+
+    max_velocity = 1D-2*min(dx,dy,dz)/dt
 
 END SUBROUTINE calculate_timestep
 
@@ -308,6 +307,10 @@ SUBROUTINE set_outflow()
 
     allocate(voutx(0:nx+1,-1:ny+1,-1:nz+1))  !Outflow combining with ex
     allocate(vouty(-1:nx+1,0:ny+1,-1:nz+1))  !Outflow combining with ey
+
+    if (voutfact < 0.0) then  !Set to maximum permitted
+        voutfact = max_velocity
+    end if
 
     do k = -1, nz+1
         hfact = (zs(k) - z0_global)/(z1_global - z0_global)   !Distance up the domain.

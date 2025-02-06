@@ -207,6 +207,7 @@ class compute_electrics():
 
         for snap in range(start, end):
 
+
             bfield_fname = '%s%04d.nc' % (data_directory, snap)
             efield_fname = '%s%03d/%04d.nc' % ('./efields/', init_number, snap)
         
@@ -237,7 +238,10 @@ class compute_electrics():
 
             bfield2 = balance_flux(bfield2)
 
-            diff = bfield2 - bfield1   #Difference between the magnetic field at import resolution
+            if False:
+                diff = bfield2 - bfield1   #Difference between the magnetic field at import resolution
+            else:
+                diff = 0.0*bfield1  #Keep lower boundary constant, for stability testing
 
             ft = FT(grid)
             G = ft.centre_transform(-diff)

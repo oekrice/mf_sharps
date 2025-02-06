@@ -19,6 +19,8 @@ CONTAINS
 SUBROUTINE timestep()
 
     !New timestep with a quasi-implicit bit. Using a predictor for the magnfield of the new bit but not the old
+    !if (n < 17) then
+
     CALL calculate_magnetic()
 
     !CALL check_solenoidal()
@@ -31,10 +33,9 @@ SUBROUTINE timestep()
     CALL b_to_gridpts()
 
     CALL calculate_velocity()
-
     CALL calculate_pressure()
-
     CALL calculate_electric()
+    !end if
 
     CALL MPI_Barrier(comm,ierr)  !Wait for t to be broadcast everywhere.
 
@@ -113,9 +114,9 @@ SUBROUTINE calculate_velocity
     by_lim = merge(0.0_num, by1, abs(by1) < min_value)
     bz_lim = merge(0.0_num, bz1, abs(bz1) < min_value)
 
-    jx_lim = merge(0.0_num, jx1, abs(bx1) < min_value)
-    jy_lim = merge(0.0_num, jy1, abs(by1) < min_value)
-    jz_lim = merge(0.0_num, jz1, abs(bz1) < min_value)
+    jx_lim = merge(0.0_num, jx1, abs(jx1) < min_value)
+    jy_lim = merge(0.0_num, jy1, abs(jy1) < min_value)
+    jz_lim = merge(0.0_num, jz1, abs(jz1) < min_value)
 
     b2 = bx_lim**2 + by_lim**2 + bz_lim**2 !B squared
 
@@ -129,9 +130,15 @@ SUBROUTINE calculate_velocity
         soft = b2 + mf_delta*exp(-b2_lim/mf_delta)
     end if
 
-    vx = nu*(jy_lim*bz_lim - by_lim*by_lim)/soft
-    vy = nu*(jz_lim*bx_lim - by_lim*bz_lim)/soft
-    vz = nu*(jx_lim*by_lim - by_lim*bx_lim)/soft
+    vx = nu*(jy_lim*bz_lim - jz_lim*by_lim)/soft
+    vy = nu*(jz_lim*bx_lim - jx_lim*bz_lim)/soft
+    vz = nu*(jx_lim*by_lim - jy_lim*bx_lim)/soft
+
+    vx = merge(vx, max_velocity*sign(1.0_num, vx), abs(vx) < max_velocity)
+    vy = merge(vy, max_velocity*sign(1.0_num, vy), abs(vy) < max_velocity)
+    vz = merge(vz, max_velocity*sign(1.0_num, vz), abs(vz) < max_velocity)
+
+    !print*, max_velocity, minval(abs(soft)), maxval(abs(vx)), maxval(abs(vy)), maxval(abs(vz))
 
     if (z_down < 0) then
         vx(:,:,0) = 0.0_num; vy(:,:,0) = 0.0_num; vz(:,:,0) = 0.0_num
@@ -165,7 +172,7 @@ SUBROUTINE check_solenoidal()
     div(0:nx+1,0:ny+1,0:nz+1) = div(0:nx+1,0:ny+1,0:nz+1) + dy*dz*(bx(-1:nx,0:ny+1,0:nz+1) - bx(0:nx+1,0:ny+1,0:nz+1))
     div(0:nx+1,0:ny+1,0:nz+1) = div(0:nx+1,0:ny+1,0:nz+1) + dx*dz*(by(0:nx+1,-1:ny,0:nz+1) - by(0:nx+1,0:ny+1,0:nz+1))
 
-    print*, 'Max divergence', maxval(abs(div(0:nx+1,0:ny+1,0:nz+1)))
+    print*, 'Max divergence', maxval(abs(div(1:nx,1:ny,1:nz)))
 
 END SUBROUTINE check_solenoidal
 

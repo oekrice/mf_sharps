@@ -36,6 +36,7 @@ def obtain_sharp(sharpnum, fname_root, plot_flag = 0, files = []):
             fname = fname_root + '%05d_%05d.nc' % (sharpnum, fi)
         files.append(fname)
 
+    print(files)
     for fname in files:
         #Save out as netcdf
         if plot_flag:

@@ -54,17 +54,17 @@ last_magnetogram_time = 250.0   #Time of the last magnetogram. Assumed to be equ
 mag_start = 0
 
 normalise_inputs = True       #If True, will normalise all the magnetic fields such that the max radial component is 1. Also adresses flux balance.
-dothings = True
+dothings = False
 recalculate_inputs = dothings   #Redo the interpolation from the SHARP inputs onto this grid
 recalculate_init = dothings       #Recalculates the initial potential field
-recalculate_boundary = dothings  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
+recalculate_boundary = False  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
 
 nx = 128
 
 #DYNAMIC SYSTEM PARAMETERS
 #-------------------------------------
-voutfact = 5.0
-shearfact = 1.0#3.7e-5   #factor by which to change the imported 'speed'
+voutfact = -1.0   #Outflow speed. If negative, will go for as much as possible without instabilities
+shearfact = 0.0#3.7e-5   #factor by which to change the imported 'speed'
 eta0 = 0.0
 
 tmax = last_magnetogram_time
@@ -73,8 +73,8 @@ tstart = 0.0
 ndiags = 1000
 nplots = -1
 
-nu0 = 0.0#np.geomspace(1.0,50.0,10)[run]
-eta = 1.0
+nu0 = 10.0#np.geomspace(1.0,50.0,10)[run]
+eta = 0.0
 
 x0 = -100.0; x1 = 100.0   #Keep this as 100, no matter what the domain size is. Because that seemed to work.
 y0 = -100.0; y1 = 100.0
@@ -215,9 +215,13 @@ print('____________________________________________')
 grid = Grid()
 
 #Check if converted SHARPs already exist, to avoid doing this unecessarily
+if os.path.exists(sharps_directory + '%05d_mag/' % sharp_id):
+    if len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id)) > 1 and not recalculate_inputs:
+        print('Importing existing converted magnetic field...')
+    else:
+        print('Converting raw SHARPS onto this grid')
+        convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs)
 
-if len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id)) > 1 and not recalculate_inputs:
-    print('Importing existing converted magnetic field...')
 else:
     print('Converting raw SHARPS onto this grid')
     convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs)
