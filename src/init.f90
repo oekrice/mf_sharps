@@ -191,6 +191,7 @@ SUBROUTINE establish_grid()
     call try(nf90_get_var(ncid, vid, az(0:nx,0:ny,1:nz), &
     start = (/x_rank*nx+1,y_rank*ny+1,z_rank*nz+1/),count = (/nx+1,ny+1,nz/)))
 
+
     call try(nf90_inq_varid(ncid, 'xs', vid))
     call try(nf90_get_var(ncid, vid, xs(0:nx), &
     start = (/x_rank*nx+1/),count = (/nx+1/)))

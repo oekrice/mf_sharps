@@ -14,7 +14,7 @@ import time
 import matplotlib.pyplot as plt
 
 from init import compute_initial_condition
-from write_electric import compute_electrics
+from write_electric import compute_electrics, compute_inplane_helicity, read_boundary
 from scipy.io import netcdf_file
 from scipy.optimize import curve_fit
 from scipy.io import netcdf_file
@@ -51,19 +51,19 @@ except:
 sharps_directory = '/extra/tmp/trcn27/sharps/'
 max_mags = 100 #Maximum number of input magnetograms (won't convert all the import data)
 last_magnetogram_time = 250.0   #Time of the last magnetogram. Assumed to be equally spaced up to this point
-mag_start = 0
+mag_start = 0   #First magnetogram to start from
 
 normalise_inputs = True       #If True, will normalise all the magnetic fields such that the max radial component is 1. Also adresses flux balance.
 dothings = False
 recalculate_inputs = dothings   #Redo the interpolation from the SHARP inputs onto this grid
 recalculate_init = dothings       #Recalculates the initial potential field
-recalculate_boundary = False  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
+recalculate_boundary = dothings  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
 
 nx = 128
 
 #DYNAMIC SYSTEM PARAMETERS
 #-------------------------------------
-voutfact = -1.0   #Outflow speed. If negative, will go for as much as possible without instabilities
+voutfact = 0.0   #Outflow speed. If negative, will go for as much as possible without instabilities
 shearfact = 0.0#3.7e-5   #factor by which to change the imported 'speed'
 eta0 = 0.0
 
@@ -73,8 +73,9 @@ tstart = 0.0
 ndiags = 1000
 nplots = -1
 
-nu0 = 10.0#np.geomspace(1.0,50.0,10)[run]
-eta = 0.0
+nu0 = 0.0
+eta = 1.0#5e-4*nu0
+#eta = 10.0
 
 x0 = -100.0; x1 = 100.0   #Keep this as 100, no matter what the domain size is. Because that seemed to work.
 y0 = -100.0; y1 = 100.0
@@ -330,16 +331,38 @@ mag_root = sharps_directory + '%05d_mag/' % sharp_id
 if recalculate_boundary:
     compute_electrics(run, init_number, mag_root, mag_times, omega = 0.0, start = 0, end = nmags-1, initialise = True, plot = False)
 
-halls = []; omegas = []; tplots = []
+
+
+bx, by, bz = read_boundary('./inits/init%03d.nc' % init_number)
+check = np.sum(compute_inplane_helicity(grid, bx, by, bz))
+
+if mag_start != 0:
+    halls = np.load('./hdata/halls%03d.npy' % run)
+    omegas = np.load('./hdata/omegas%03d.npy' % omegas)
+    tplots = np.load('./hdata/tplots%03d.npy' % tplots)
+    halls[mag_start+1:] = 0.0
+    omegas[mag_start+1:] = 0.0
+    tplots[mag_start+1:] = 0.0
+
+else:
+    halls = np.zeros(nmags)
+    omegas = np.zeros(nmags)
+    tplots = np.zeros(nmags)
+    halls[0] = check
+    omegas[0] = omega
+    tplots[0] = mag_times[0]
 
 if hflag < 0.5:
     os.system('make')
+
+hrefs = np.load('./hdata/h_ref.npy').tolist()
 
 nmags_per_run = 1   #How many magnetic field INTERVALS to run for a given magnetofrictional chunk, with constant omega in each case
 
 for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_run):
 
-    omega_init = omega
+    if block_start > 0:
+        omega = omegas[block_start-1]
     block_end = min(block_start + nmags_per_run, nmags-1)
 
     xs = []; ys = []  #For the function interpolation
@@ -347,21 +370,30 @@ for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_
     go  = True
     stopnext = False
 
+    hardmax = 0.1
     while go:
-        #Find the ideal omega
         go = False
+        omega = 0.0
+        #Find the ideal omega
         if stopnext:
             go = False
 
-        maxomega = 1.0
-        minomega = -1.0
+        if mag_start > 0:
+            back = max(0, block_start - 5)
+            maxomega = max(np.abs(omegas[block_start-back:block_start])*2.0)  #Change this dynamically to keep things within range
+        else:
+            maxomega = hardmax
+
+        maxomega = min(maxomega, hardmax)
+        minomega = -maxomega
 
         omega = max(minomega, omega)
         omega = min(maxomega, omega)
 
+        omega_range = maxomega - minomega
         print('Running step from', block_start, 'to', block_end, 'omega = ', omega)
-
-        compute_electrics(run, init_number, mag_root, mag_times, omega = omega, start = block_start, end = block_end, initialise = False, plot = False)
+        print('Minmax', minomega, maxomega)
+        efield_data = compute_electrics(run, init_number, mag_root, mag_times, omega = omega, start = block_start, end = block_end, initialise = False, plot = False)
 
         variables[29] = block_start
         variables[30] = block_end
@@ -373,57 +405,59 @@ for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_
             os.system('/usr/lib64/openmpi/bin/mpiexec ffpe-summary=none -np %d ./bin/mf3d %d' % (nprocs, run))
         else:
             os.system('/usr/lib64/openmpi/bin/mpiexec -np %d --oversubscribe ./bin/mf3d %d' % (nprocs, run))
-        '''
+
         #Check helicity against reference
 
         #Want to add the option to use other measures here, so probably shouldn't call it helicity
+        end_fname = './mf_mags/%03d/%04d.nc' % (run, block_end)
 
-        check = compute_helicity(run, mag_end)
-        target = hrefs[mag_end]
+        bx, by, bz = read_boundary(end_fname)
+        check = np.sum(compute_inplane_helicity(grid, bx, by, bz))
+        target = hrefs[block_end]
+
+        halls[block_end] = check
+        omegas[block_start] = omega
+        tplots[block_end] = mag_times[block_end]
+
+        np.save('./hdata/halls%03d.npy' % run, halls)
+        np.save('./hdata/omegas%03d.npy' % run, omegas)
+        np.save('./hdata/tplots%03d.npy' % run, tplots)
+
+        print('Check, target', check, target)
         #THIS ASSUMES A ZERO INTERCEPT RATHER THAN MINIMISING ANYTHING
 
-        if find_intercept:
-            xs.append(omega); ys.append(check - target)
+        xs.append(omega); ys.append(check - target)
 
-            if abs(check - target) < 1e0:   #Close enough
-                go = False
-                print('GOOD ENOUGH',  omega, check-target, xs, ys)
+        if abs(check - target) < 1e0:   #Close enough
+            go = False
+            print('GOOD ENOUGH',  omega, check-target, xs, ys)
 
-            else:   #not close enough, make a better estimate
-                print('NOT GOOD ENOUGH', omega, check-target, xs, ys)
-                if len(xs) == 1:
-                    if check > target and omega > minomega:
-                        omega = omega/1.1
-                    elif check < target and omega < maxomega:
-                        omega = omega*1.1
-                    else:
-                        go = False
+        else:   #not close enough, make a better estimate
+            print('NOT GOOD ENOUGH', omega, check-target, xs, ys)
+            if len(xs) == 1:
+                if check > target and omega > minomega:
+                    omega = omega - omega_range/4
+                elif check < target and omega < maxomega:
+                    omega = omega + omega_range/4
                 else:
-                    #Check for anomalies...
-                    if (ys[-1] - ys[-2]) / (xs[-1] - xs[-2]) < 0:
-                        go = False
+                    go = False
+            else:
+                #Check for anomalies...
+                if (ys[-1] - ys[-2]) / (xs[-1] - xs[-2]) < 0:
+                    go = False
+                else:
+                    nr_target = xs[-1] - ys[-1]*((xs[-1] - xs[-2])/(ys[-1] - ys[-2]))
+                    if nr_target > maxomega:
+                        omega = np.mean(omegas[block_start-back:block_start])
+                        stopnext = True
+                        print('OMEGA BIG', nr_target)
+                    elif nr_target < minomega:
+                        omega = minomega
+                        omega = np.mean(omegas[block_start-back:block_start])
+                        stopnext = True
+                        print('OMEGA SMALL', nr_target)
 
                     else:
-                        nr_target = xs[-1] - ys[-1]*((xs[-1] - xs[-2])/(ys[-1] - ys[-2]))
-                        if nr_target > maxomega:
-                            omega = maxomega
-                            stopnext = True
-                            print('OMEGA BIG', nr_target)
-                        elif nr_target < minomega:
-                            omega = minomega
-                            stopnext = True
-                            print('OMEGA SMALL', nr_target)
+                        print('TARGET',nr_target)
+                        omega = nr_target
 
-                        else:
-                            print('TARGET',nr_target)
-                            omega = nr_target
-
-    halls.append(check)
-    omegas.append(omega)
-    tplots.append(mag_end*0.5)
-
-    np.save('./hdata/halls.npy', halls)
-    np.save('./hdata/omegas.npy', omegas)
-    np.save('./hdata/tplots.npy', tplots)
-
-'''

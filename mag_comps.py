@@ -65,7 +65,10 @@ class compute_inplane_helicity():
         runs = [-1] + np.arange(run_min, run_max).tolist()
         omegas = []
 
+        scales = np.zeros((4,2))
+
         for snap_num in range(snap, snap+1):
+            fig, axs = plt.subplots(4, 2)
 
             for ri, run in enumerate(runs):
                 if run >= 0:
@@ -101,8 +104,6 @@ class compute_inplane_helicity():
                     bx0 = 0.5*(bx[1:,1:-1] + bx[:-1,1:-1])
                     by0 = 0.5*(by[1:-1,1:] + by[1:-1,:-1])
                     bz0 = bz[1:-1,1:-1]
-                    print(bx.shape, by.shape, bz.shape)
-                    bz_ref = bz[:,:]
 
                 else:
                     bx = np.swapaxes(data.variables['bx'][:],0,1)
@@ -112,34 +113,8 @@ class compute_inplane_helicity():
                     by0 = 0.5*(by[:,1:] + by[:,:-1])
                     bz0 = bz[:,:]
 
-                    bz_mf = bz[:,:]
-
-                    fig, axs = plt.subplots(4)
-                    ax = axs[0]
-                    im = ax.pcolormesh(bz_ref.T)
-                    plt.colorbar(im, ax = ax)
-                    ax = axs[1]
-                    im = ax.pcolormesh(bz_mf.T)
-                    plt.colorbar(im, ax = ax)
-                    ax = axs[2]
-                    im = ax.pcolormesh(bz_ref.T[1:-1,1:-1] - bz_mf.T)
-                    plt.colorbar(im, ax = ax)
-
-                    ax = axs[3]
-
-                    im = ax.pcolormesh((bz_mf.T)/bz_ref.T[1:-1,1:-1])
-                    plt.colorbar(im, ax = ax)
-
-                    fact = np.max(bz_mf)/np.max(bz_ref)
-                    print(fact - 1)
-                    print(1/(fact-1))
 
 
-                    print(np.max(bz_mf)/np.max(bz_ref))
-                    print(np.min(bz_mf)/np.min(bz_ref))
-
-                    plt.tight_layout()
-                    plt.show()
                 #Trim the edges out as these can go a bit screwy and bugger up the results
 
                 def norm2d(vec):
@@ -193,10 +168,31 @@ class compute_inplane_helicity():
                 #print('Vector potential test', np.max(np.abs(bz[1:-1,1:-1] - bz_test[1:-1,1:-1]))/np.max(np.abs(bz[1:-1,1:-1])))
                 #This vector potential should be reasonably OK... Need code to test though
 
-                hfield = ax0*bx0 + ay0*by0 + az0*bz0
+                hfield = np.sqrt(np.abs(ax0*bx0 + ay0*by0 + az0*bz0))
+
+                print(np.sum(hfield))
+                toplots = [bx.T, by.T, bz.T, hfield.T]
+
+                for plot in range(4):
+                    if ri == 0:
+                        vmin = -np.max(np.abs(toplots[plot]))
+                        vmax = np.max(np.abs(toplots[plot]))
+                        scales[plot, 0] = vmin
+                        scales[plot, 1] = vmax
+
+                    else:
+                        vmin = scales[plot,0]
+                        vmax = scales[plot,1]
+                    ax = axs[plot,ri]
+                    im = ax.pcolormesh(toplots[plot], cmap = 'seismic', vmin = vmin, vmax = vmax)
+
+                    plt.colorbar(im, ax = ax)
+
+                if ri > 0:
+                    plt.tight_layout()
+                    plt.show()
 
                 if False:
-
                     string = ['Reference', 'MF'][ri]
                     if run < 0:
                         fig, axs = plt.subplots(2,4, figsize = (10,5))
@@ -229,6 +225,7 @@ class compute_inplane_helicity():
 
                 hfield = np.sqrt(np.abs(hfield))
 
+
                 if run < 0:
                     h_ref.append(np.sum(np.abs(hfield)))
                     ts.append(snap*0.5)
@@ -260,19 +257,9 @@ class compute_inplane_helicity():
             plt.show()
 
 
+
 if len(sys.argv) > 1:
-    run_min = int(sys.argv[1])
-else:
-    run_min = 0
-
-
-if len(sys.argv) > 2:
-    run_max = int(sys.argv[2])
-else:
-    run_max = 1
-
-if len(sys.argv) > 3:
-    snap = int(sys.argv[3])
+    snap = int(sys.argv[1])
 else:
     snap = 0
 

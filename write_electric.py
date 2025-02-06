@@ -24,6 +24,106 @@ from scipy.fft import fft, ifft2, fft2, ifft
 import os
 from scipy.ndimage import gaussian_filter
 
+def read_boundary(fname):
+    #Reads in saved magnetic field and just outputs bx, by, bz
+    data = netcdf_file(fname, 'r', mmap=False)
+    #Check if this is just the boundary data or everything
+    if len(data.variables['bx'][:].shape) == 3:
+        bx = np.swapaxes(data.variables['bx'][:], 0, 2)[1:-1,:,0]
+        by = np.swapaxes(data.variables['by'][:], 0, 2)[:,1:-1,0]
+        bz = np.swapaxes(data.variables['bz'][:], 0, 2)[:,:,0]
+    else:
+        bx = np.swapaxes(data.variables['bx'][:], 0, 1)[1:-1,:]
+        by = np.swapaxes(data.variables['by'][:], 0, 1)[:,1:-1]
+        bz = np.swapaxes(data.variables['bz'][:], 0, 1)[:,:]
+    return bx, by, bz
+
+
+def compute_inplane_helicity(grid, bx, by, bz, plot = False):
+    #Need to average these to grid centres to get the FFT to work
+    #Probably should just do on the interior - so resolution at the raw values
+
+    bx0 = 0.5*(bx[1:,1:-1] + bx[:-1,1:-1])
+    by0 = 0.5*(by[1:-1,1:] + by[1:-1,:-1])
+    bz0 = bz[1:-1,1:-1]
+
+    def norm2d(vec):
+        mag = np.linalg.norm(vec)
+        if (mag > 0.0):
+            v = vec/mag
+        else:
+            v = np.array([0, 0])
+        return np.array([v[0],v[1],0.0])
+
+    def getFrequencyMatrix(ncells,spacing):
+        freqlist1da =np.roll(np.linspace(-ncells[0]/2,ncells[0]/2-1,ncells[0]),round(ncells[0]/2))/(ncells[0]*spacing[0])
+        freqlist1db =np.roll(np.linspace(-ncells[1]/2,ncells[1]/2-1,ncells[1]),round(ncells[1]/2))/(ncells[1]*spacing[1])
+        return np.array([np.array([np.array([2.0*np.pi*freqlist1da[i],2.0*np.pi*freqlist1db[j]]) for j in range(len(freqlist1db))]) for i  in range(len(freqlist1da))]);
+
+    #def curla(ax, ay, az):
+        #Outputs the curl of a (which is averaged to grid points so a bit messy)
+
+    #Find in -plane vector potential in the winding gauge
+
+    fm = getFrequencyMatrix([bz0.shape[0], bz0.shape[1]],[grid.dx, grid.dy]);
+    # make the basis
+
+    kparr = np.array([np.array([norm2d(fm[i][j]) for j in range(len(fm[0]))]) for i  in range(len(fm))]);
+    kperp = np.array([np.array([np.array([-kparr[i][j][1],kparr[i][j][0],0.0]) for j in range(len(fm[0]))]) for i  in range(len(fm))])
+    # note in the k matrix below the k=0 element is set to one so we can divide by it.
+    k = np.array([np.array([1.0 if i==j==0 else np.linalg.norm(fm[i][j]) for i in range(len(fm))]) for j  in range(len(fm[0]))]).T
+
+    nx = bz0.shape[0]; ny = bz0.shape[1]
+    aftx = np.zeros([bz0.shape[0],bz0.shape[1]],dtype=np.complex128)
+    afty = np.zeros([bz0.shape[0],bz0.shape[1]],dtype=np.complex128)
+    aftz = np.zeros([bz0.shape[0],bz0.shape[1]],dtype=np.complex128)
+
+    fbx = fft2(bx0[:,:]); fby = fft2(by0[:,:]); fbz = fft2(bz0[:,:])
+
+    akperp = -1j*fbz/k
+    ## fix i =j  element
+    akw = 1j*(-(kparr[:,:,1])*fbx + (kparr[:,:,0])*fby)/k
+    ## fix i =j  element
+    aftx[:,:] = akperp*kperp[:,:,0]
+    afty[:,:] = akperp*kperp[:,:,1]
+    aftz[:,:] = akperp*kperp[:,:,2]+akw
+
+    ax0 = ifft2(aftx[:,:])
+    ay0 = ifft2(afty[:,:])
+    az0 = ifft2(aftz[:,:])
+    ax0 = np.real(ax0)
+    ay0 = np.real(ay0)
+    az0 = np.real(az0)
+
+    ax = np.zeros((nx, ny+1))
+    ay = np.zeros((nx+1, ny))
+
+    ax[:,1:-1] = 0.5*(ax0[:,1:] + ax0[:,:-1])
+    ay[1:-1,:] = 0.5*(ay0[1:,:] + ay0[:-1,:])
+
+    bz_test = (ay[1:,:] - ay[:-1,:])/grid.dx - (ax[:,1:] - ax[:,:-1])/grid.dy
+    #This vector potential should be reasonably OK... Need code to test though
+    if plot:
+        fig, axs = plt.subplots(3)
+        ax = axs[0]
+        im = ax.pcolormesh(bz)
+        plt.colorbar(im, ax = ax)
+
+        ax = axs[1]
+        im = ax.pcolormesh(bz_test)
+        plt.colorbar(im, ax = ax)
+
+        ax = axs[2]
+        im = ax.pcolormesh(bz_test[1:-1,1:-1] - bz[2:-2,2:-2])
+        plt.colorbar(im, ax = ax)
+        plt.tight_layout()
+        plt.show()
+    #Should be proportional to the magnetic field strength, so this helicity requires a square root. I'm pretty sure the scaling is OK here...
+    hfield = np.sqrt(np.abs(ax0*bx0 + ay0*by0 + az0*bz0))
+
+    return hfield
+
+
 class Grid():
     """In the interest of doing it properly, put grid parameters in here"""
     def __init__(self, run):
@@ -204,9 +304,14 @@ class compute_electrics():
 
         if initialise:   #Need to establish reference helicities from the magnetograms.
             hrefs = []; trefs = []
+        elif start == 0:
+            halls = []; tplots = []; omegas = []
+        else:
+            halls = np.load('./hdata/halls%03d.npy' % run).tolist()
+            omegas = np.load('./hdata/omegas%03d.npy' % run).tolist()
+            tplots = np.load('./hdata/tplots%03d.npy' % run).tolist()
 
         for snap in range(start, end):
-
 
             bfield_fname = '%s%04d.nc' % (data_directory, snap)
             efield_fname = '%s%03d/%04d.nc' % ('./efields/', init_number, snap)
@@ -331,101 +436,31 @@ class compute_electrics():
             fid.close()
 
             if initialise:  #Calculate reference helicities
-                bfield_fname = '%s%04d.nc' % (data_directory, snap + 1)
+                bfield_fname = '%s%04d.nc' % (data_directory, snap)
                 data = netcdf_file(bfield_fname, 'r', mmap=False)
                 bx = np.swapaxes(data.variables['bx'][:], 0, 1)
                 by = np.swapaxes(data.variables['by'][:], 0, 1)
                 bz = np.swapaxes(data.variables['bz'][:], 0, 1)
-                href = self.compute_inplane_helicity(grid, bx, by, bz)
+                href = compute_inplane_helicity(grid, bx, by, bz)
                 hrefs.append(np.sum(href))
                 trefs.append(mag_times[snap])
+
+        if initialise:  #Calculate final one
+            bfield_fname = '%s%04d.nc' % (data_directory, snap + 1)
+            data = netcdf_file(bfield_fname, 'r', mmap=False)
+            bx = np.swapaxes(data.variables['bx'][:], 0, 1)
+            by = np.swapaxes(data.variables['by'][:], 0, 1)
+            bz = np.swapaxes(data.variables['bz'][:], 0, 1)
+            href = compute_inplane_helicity(grid, bx, by, bz)
+            hrefs.append(np.sum(href))
+            trefs.append(mag_times[snap+1])
 
         print('Electric fields', start, ' to ', end, ' calculated and saved.')
         if initialise:
             np.save('./hdata/h_ref.npy', np.array(hrefs))
             np.save('./hdata/t_ref.npy', np.array(trefs))
-
-    def compute_inplane_helicity(self, grid, bx, by, bz, plot = False):
-        #Need to average these to grid centres to get the FFT to work
-        #Probably should just do on the interior - so resolution at the raw values
-
-        bx0 = 0.5*(bx[1:,1:-1] + bx[:-1,1:-1])
-        by0 = 0.5*(by[1:-1,1:] + by[1:-1,:-1])
-        bz0 = bz[1:-1,1:-1]
-
-        def norm2d(vec):
-            mag = np.linalg.norm(vec)
-            if (mag > 0.0):
-                v = vec/mag
-            else:
-                v = np.array([0, 0])
-            return np.array([v[0],v[1],0.0])
-
-        def getFrequencyMatrix(ncells,spacing):
-            freqlist1da =np.roll(np.linspace(-ncells[0]/2,ncells[0]/2-1,ncells[0]),round(ncells[0]/2))/(ncells[0]*spacing[0])
-            freqlist1db =np.roll(np.linspace(-ncells[1]/2,ncells[1]/2-1,ncells[1]),round(ncells[1]/2))/(ncells[1]*spacing[1])
-            return np.array([np.array([np.array([2.0*np.pi*freqlist1da[i],2.0*np.pi*freqlist1db[j]]) for j in range(len(freqlist1db))]) for i  in range(len(freqlist1da))]);
-
-        #def curla(ax, ay, az):
-            #Outputs the curl of a (which is averaged to grid points so a bit messy)
-
-        #Find in -plane vector potential in the winding gauge
-
-        fm = getFrequencyMatrix([bz0.shape[0], bz0.shape[1]],[grid.dx, grid.dy]);
-        # make the basis
-
-        kparr = np.array([np.array([norm2d(fm[i][j]) for j in range(len(fm[0]))]) for i  in range(len(fm))]);
-        kperp = np.array([np.array([np.array([-kparr[i][j][1],kparr[i][j][0],0.0]) for j in range(len(fm[0]))]) for i  in range(len(fm))])
-        # note in the k matrix below the k=0 element is set to one so we can divide by it.
-        k = np.array([np.array([1.0 if i==j==0 else np.linalg.norm(fm[i][j]) for i in range(len(fm))]) for j  in range(len(fm[0]))]).T
-
-        nx = bz0.shape[0]; ny = bz0.shape[1]
-        aftx = np.zeros([bz0.shape[0],bz0.shape[1]],dtype=np.complex128)
-        afty = np.zeros([bz0.shape[0],bz0.shape[1]],dtype=np.complex128)
-        aftz = np.zeros([bz0.shape[0],bz0.shape[1]],dtype=np.complex128)
-
-        fbx = fft2(bx0[:,:]); fby = fft2(by0[:,:]); fbz = fft2(bz0[:,:])
-
-        akperp = -1j*fbz/k
-        ## fix i =j  element
-        akw = 1j*(-(kparr[:,:,1])*fbx + (kparr[:,:,0])*fby)/k
-        ## fix i =j  element
-        aftx[:,:] = akperp*kperp[:,:,0]
-        afty[:,:] = akperp*kperp[:,:,1]
-        aftz[:,:] = akperp*kperp[:,:,2]+akw
-
-        ax0 = ifft2(aftx[:,:])
-        ay0 = ifft2(afty[:,:])
-        az0 = ifft2(aftz[:,:])
-        ax0 = np.real(ax0)
-        ay0 = np.real(ay0)
-        az0 = np.real(az0)
-
-        ax = np.zeros((nx, ny+1))
-        ay = np.zeros((nx+1, ny))
-
-        ax[:,1:-1] = 0.5*(ax0[:,1:] + ax0[:,:-1])
-        ay[1:-1,:] = 0.5*(ay0[1:,:] + ay0[:-1,:])
-
-        bz_test = (ay[1:,:] - ay[:-1,:])/grid.dx - (ax[:,1:] - ax[:,:-1])/grid.dy
-        #This vector potential should be reasonably OK... Need code to test though
-        if plot:
-            fig, axs = plt.subplots(3)
-            ax = axs[0]
-            im = ax.pcolormesh(bz)
-            plt.colorbar(im, ax = ax)
-
-            ax = axs[1]
-            im = ax.pcolormesh(bz_test)
-            plt.colorbar(im, ax = ax)
-
-            ax = axs[2]
-            im = ax.pcolormesh(bz_test[1:-1,1:-1] - bz[2:-2,2:-2])
-            plt.colorbar(im, ax = ax)
-            plt.tight_layout()
-            plt.show()
-        #Should be proportional to the magnetic field strength, so this helicity requires a square root. I'm pretty sure the scaling is OK here...
-        hfield = np.sqrt(np.abs(ax0*bx0 + ay0*by0 + az0*bz0))
-
-        return hfield
+        else:
+            self.halls = halls
+            self.tplots = tplots
+            self.omegas = omegas
 
