@@ -343,7 +343,7 @@ class compute_electrics():
 
             bfield2 = balance_flux(bfield2)
 
-            if False:
+            if True:
                 diff = bfield2 - bfield1   #Difference between the magnetic field at import resolution
             else:
                 diff = 0.0*bfield1  #Keep lower boundary constant, for stability testing
@@ -352,7 +352,6 @@ class compute_electrics():
             G = ft.centre_transform(-diff)
             ex, ey = grid.curl_inplane(G)
             curl_test = grid.curl_E(ex, ey)
-        
         
             if plot:
                 fig, axs = plt.subplots(3)
@@ -401,12 +400,36 @@ class compute_electrics():
             ex = -ex
             ey = -ey
 
+            if True:   #Constrain to envelope (removes exact solution, unfortunately)
+
+                input_xs = np.linspace(-1,1,ex.shape[0])
+                input_ys = np.linspace(-1,1,ex.shape[1])
+
+                X, Y = np.meshgrid(input_xs, input_ys, indexing = 'ij')
+                edge = 0.9; steep = 20.0
+                envelope = 0.5-0.5*np.tanh(np.maximum(steep*(X**2-edge), steep*(Y**2-edge)))
+
+                envelope[-1,:] = 0.0;envelope[0,:] = 0.0;envelope[:,0] = 0.0;envelope[:,-1] = 0.0
+
+                ex = ex*envelope
+
+                input_xs = np.linspace(-1,1,ey.shape[0])
+                input_ys = np.linspace(-1,1,ey.shape[1])
+
+                X, Y = np.meshgrid(input_xs, input_ys, indexing = 'ij')
+                edge = 0.9; steep = 20.0
+                envelope = 0.5-0.5*np.tanh(np.maximum(steep*(X**2-edge), steep*(Y**2-edge)))
+
+                envelope[-1,:] = 0.0;envelope[0,:] = 0.0;envelope[:,0] = 0.0;envelope[:,-1] = 0.0
+
+                ey = ey*envelope
+
             if False:
-                plt.pcolormesh(ey)
+                plt.pcolormesh(ey, cmap = 'seismic', vmin = -np.max(np.abs(ey)), vmax = np.max(np.abs(ey)))
                 plt.savefig('plots/ey%d.png' % snap)
                 plt.close()
                 
-                plt.pcolormesh(ex)
+                plt.pcolormesh(ex, cmap = 'seismic', vmin = -np.max(np.abs(ex)), vmax = np.max(np.abs(ex)))
                 plt.savefig('plots/ex%d.png' % snap)
                 plt.show()
 

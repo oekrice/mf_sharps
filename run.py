@@ -19,8 +19,10 @@ from scipy.io import netcdf_file
 from scipy.optimize import curve_fit
 from scipy.io import netcdf_file
 
-from obtain_sharps import obtain_sharp
+from obtain_sharps import obtain_sharp, lookup_sharp
 from convert_sharps import sharp_info, convert_sharp
+
+
 
 if len(sys.argv) > 1:
     run = int(sys.argv[1])
@@ -33,9 +35,9 @@ else:
     nprocs = 1
 
 if len(sys.argv) > 3:
-    sharp_id = int(sys.argv[3])
+    region_id = int(sys.argv[3])
 else:
-    sharp_id = 1449
+    region_id = 11318
 
 try:
     if os.uname()[1] == 'brillouin.dur.ac.uk':
@@ -48,16 +50,20 @@ except:
     hflag = 0
     winflag = 1
 
+sharp_id = 956 #1449
+
 sharps_directory = '/extra/tmp/trcn27/sharps/'
 max_mags = 100 #Maximum number of input magnetograms (won't convert all the import data)
-last_magnetogram_time = 250.0   #Time of the last magnetogram. Assumed to be equally spaced up to this point
+time_per_snap = 0.05  #Time units per input minute
+
 mag_start = 0   #First magnetogram to start from
 
 normalise_inputs = True       #If True, will normalise all the magnetic fields such that the max radial component is 1. Also adresses flux balance.
 dothings = False
+check_data = False
 recalculate_inputs = dothings   #Redo the interpolation from the SHARP inputs onto this grid
 recalculate_init = dothings       #Recalculates the initial potential field
-recalculate_boundary = dothings  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
+recalculate_boundary = True  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
 
 nx = 128
 
@@ -67,7 +73,6 @@ voutfact = 0.0   #Outflow speed. If negative, will go for as much as possible wi
 shearfact = 0.0#3.7e-5   #factor by which to change the imported 'speed'
 eta0 = 0.0
 
-tmax = last_magnetogram_time
 tstart = 0.0
 
 ndiags = 1000
@@ -183,12 +188,30 @@ class Grid():
 
 #Step 0: If sharp data isn't downloaded yet, do that. May take some time.
 
-if not os.path.exists(sharps_directory + '%05d_raw/' % sharp_id):
-    print('No data exists. Will attempt to download in 2 seconds...')
-    time.sleep(2.0)
-    obtain_sharp(sharp_id, sharps_directory)
-else:
-    print('Raw sharp data found.')
+if sharp_id < 0:
+    sharp_id = lookup_sharp(region_id)   #Attempt to find valid HARP number from the active region id
+    print('SHARP ID found:', sharp_id)
+
+if check_data or not os.path.exists(sharps_directory + '%05d_raw/' % sharp_id):
+    if not os.path.exists(sharps_directory + '%05d_raw/' % sharp_id):
+        print('No data exists. Will attempt to download...')
+        obtain_sharp(sharp_id, sharps_directory, plot_flag = True)
+    else:
+        print('Some raw sharp data found. Checking if this is everything...')
+        if os.path.exists('./parameters/raw_times%05d.npy' % sharp_id):
+            #Check number of mags from the raw times
+            nmags = len(np.load('./parameters/raw_times%05d.npy' % sharp_id))
+            print(nmags)
+            if os.path.exists(sharps_directory + '%05d_raw/%05d.nc' % (sharp_id, nmags-1)):
+                print('Data exists up to the end of the required time')
+            else:
+                print('Data download incomplete. Trying to download remaining files...')
+                obtain_sharp(sharp_id, sharps_directory, plot_flag = True)
+        else:
+            #Doesn't exist yet, so need to (slowly) obtain the data for how many mags
+            print('Data somehow incomplete. Trying to download again...')
+            obtain_sharp(sharp_id, sharps_directory, plot_flag = True)
+
 
 print('____________________________________________')
 #Step 1: Import sharp magnetograms and do some processing on them.
@@ -201,6 +224,7 @@ print('Importing SHARP data from number', sharp_id)
 
 import_nx, import_ny, start, end = sharp_info(sharp_id, sharps_directory)
 
+print('Using raw data from ', start, ' to ', end)
 #Use the import ratios to establish the grid.
 #Resolutions will be based on the ratio of the imported data, based on the nx above
 aspect = import_ny/import_nx
@@ -228,7 +252,15 @@ else:
     convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs)
 
 nmags = len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id))
-mag_times = np.linspace(0.0, last_magnetogram_time, nmags)
+
+if os.path.exists('./parameters/raw_times%05d.npy' % sharp_id):
+    raw_mag_times = np.load('./parameters/raw_times%05d.npy' % sharp_id)
+else:
+    raw_mag_times = np.linspace(0.0, last_magnetogram_time, nmags)
+
+mag_times = np.load('./parameters/mag_times%05d.npy' % sharp_id)
+mag_times = (mag_times - mag_times[0])*time_per_snap
+tmax = mag_times[-1]
 
 nplots = nmags
 
@@ -331,7 +363,7 @@ mag_root = sharps_directory + '%05d_mag/' % sharp_id
 if recalculate_boundary:
     compute_electrics(run, init_number, mag_root, mag_times, omega = 0.0, start = 0, end = nmags-1, initialise = True, plot = False)
 
-
+stop
 
 bx, by, bz = read_boundary('./inits/init%03d.nc' % init_number)
 check = np.sum(compute_inplane_helicity(grid, bx, by, bz))

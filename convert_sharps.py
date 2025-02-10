@@ -15,6 +15,8 @@ from scipy.interpolate import RegularGridInterpolator
 def sharp_info(sharp_id, root_fname):
     #For a series of SHARP data, returns the first and last good file, and the resolutions
     raw_directory = root_fname + '%05d_raw/' % sharp_id
+    #Check length of this list against info
+
     flist = os.listdir(raw_directory)
     flist.sort()
 
@@ -35,20 +37,33 @@ def sharp_info(sharp_id, root_fname):
         print('Hopefully sucessful. Carrying on.')
 
     for fi, fname in enumerate(flist):
-        data = netcdf_file(raw_directory + fname, 'r', mmap=False)
-        bp = np.swapaxes(data.variables['Bp'][:], 0,1)
-        data.close()
-        if np.sum(~np.isnan(bp)) == bp.shape[0]*bp.shape[1]:
-            start = fi
-            break
+        try:
+            data = netcdf_file(raw_directory + fname, 'r', mmap=False)
+            bp = np.swapaxes(data.variables['Bp'][:], 0,1)
+            data.close()
+            if np.sum(~np.isnan(bp)) == bp.shape[0]*bp.shape[1]:
+                if fi == 0:
+                    start = fi   #Start not near a limb
+                else:
+                    start = fi + 80     #Start near a limb
+                break
+        except:
+            pass
 
     for fi, fname in enumerate(flist[::-1]):
-        data = netcdf_file(raw_directory + fname, 'r', mmap=False)
-        bp = np.swapaxes(data.variables['Bp'][:], 0,1)
-        data.close()
-        if np.sum(~np.isnan(bp)) == bp.shape[0]*bp.shape[1]:
-            end = len(flist) - 2 - fi
-            break
+        try:
+            data = netcdf_file(raw_directory + fname, 'r', mmap=False)
+            bp = np.swapaxes(data.variables['Bp'][:], 0,1)
+            data.close()
+            if np.sum(~np.isnan(bp)) == bp.shape[0]*bp.shape[1]:
+                end = len(flist) - 2 - fi
+                if fi == 0:
+                    end = len(flist) - 2 - fi
+                else:
+                    end = len(flist) - 2 - fi - 80
+                break
+        except:
+            pass
 
     return bp.shape[0], bp.shape[1], start, end
 
@@ -84,10 +99,19 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
 
     output_count = 0
     thin_fact = max(1, int((end - start)/max_mags) + 1)
+    raw_mag_times = np.load('./parameters/raw_times%05d.npy' % sharp_id)
 
+    mag_times = []
     for fi in range(start, end, thin_fact):
 
-        fname = raw_directory + 'sharp%05d_%05d.nc' % (sharp_id, fi)
+        mag_times.append(raw_mag_times[fi])
+
+        fname = raw_directory + '%05d_%05d.nc' % (sharp_id, fi)
+
+        data = netcdf_file(fname, 'r', mmap=False)
+        bp = np.swapaxes(data.variables['Bp'][:], 0,1)
+        bt = np.swapaxes(data.variables['Bt'][:], 0,1)
+        br = np.swapaxes(data.variables['Br'][:], 0,1)
         try:
             data = netcdf_file(fname, 'r', mmap=False)
             bp = np.swapaxes(data.variables['Bp'][:], 0,1)
@@ -119,6 +143,19 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
         by_smooth = gaussian_filter(-bt, sigma = grid_downscale)
         bz_smooth = gaussian_filter(br, sigma = grid_downscale)
 
+        input_xs = np.linspace(-1,1,bp.shape[0])
+        input_ys = np.linspace(-1,1,bp.shape[1])
+        #Force smoothly to zero at the edges of the domain, to stop boundary mess appearing
+        X, Y = np.meshgrid(input_xs, input_ys, indexing = 'ij')
+        edge = 0.9; steep = 20.0
+        envelope = 0.5-0.5*np.tanh(np.maximum(steep*(X**2-edge), steep*(Y**2-edge)))
+
+        envelope[-1,:] = 0.0;envelope[0,:] = 0.0;envelope[:,0] = 0.0;envelope[:,-1] = 0.0
+
+        bx_smooth = bx_smooth*envelope
+        by_smooth = by_smooth*envelope
+        bz_smooth = bz_smooth*envelope
+
         #Interpolate onto the STAGGERED grid (just linearly)
         xs_import = np.linspace(grid.x0, grid.x1, bx_smooth.shape[0])
         ys_import = np.linspace(grid.y0, grid.y1, by_smooth.shape[1])
@@ -126,6 +163,7 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
         X, Y = np.meshgrid(grid.xs, grid.yc, indexing = 'ij')
         bx_fn = RegularGridInterpolator((xs_import, ys_import), bx_smooth, bounds_error = False, method = 'linear', fill_value = 0.0)
         bx_out = bx_fn((X,Y))   #Difference now interpolated to the new grid
+
 
         X, Y = np.meshgrid(grid.xc, grid.ys, indexing = 'ij')
         by_fn = RegularGridInterpolator((xs_import, ys_import), by_smooth, bounds_error = False, method = 'linear', fill_value = 0.0)
@@ -146,26 +184,26 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
         if plot:
             fig, axs = plt.subplots(3,3, figsize = (10,10))
 
-            toplot = bx_smooth
+            toplot = bx_smooth.T
             axs[1,0].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
-            toplot = by_smooth
+            toplot = by_smooth.T
             axs[1,1].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
-            toplot = bz_smooth
+            toplot = bz_smooth.T
             axs[1,2].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
 
-            toplot = bp
+            toplot = bp.T
             axs[0,0].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
-            toplot = bt
+            toplot = bt.T
 
             axs[0,1].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
-            toplot = br
+            toplot = br.T
             axs[0,2].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
 
-            toplot = bx_out
+            toplot = bx_out.T
             axs[2,0].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
-            toplot = by_out
+            toplot = by_out.T
             axs[2,1].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
-            toplot = bz_out
+            toplot = bz_out.T
             axs[2,2].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
 
             plt.savefig('./plots/%05d' % output_count)
@@ -200,6 +238,8 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
         fid.close()
 
         output_count += 1
+
+    np.save('./parameters/mag_times%05d.npy' % sharp_id, np.array(mag_times))
 
 
 

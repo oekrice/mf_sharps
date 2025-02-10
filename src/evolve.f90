@@ -29,13 +29,11 @@ SUBROUTINE timestep()
 
     CALL calculate_current()
 
-    !print*, 'j', maxval(abs(jx)),  maxval(abs(jy)),  maxval(abs(jz))
     CALL j_to_gridpts()
     CALL b_to_gridpts()
 
     CALL calculate_velocity()
-
-    !CALL calculate_pressure()
+    CALL calculate_pressure()
     CALL calculate_electric()
     !end if
 
@@ -182,22 +180,14 @@ SUBROUTINE calculate_electric()
 
     !Calculates the electric field - resistivity, magnetofriction and boundary effects
     IMPLICIT NONE
-    real(num), dimension(:,:,:):: jx_lim(0:nx,0:ny,0:nz), jy_lim(0:nx,0:ny,0:nz), jz_lim(0:nx,0:ny,0:nz)
-    real(num):: min_value
-
-    min_value = 1D-8
 
     ex = 0.0; ey = 0.0; ez = 0.0
 
-    jx_lim = jx!merge(0.0_num, jx, abs(jx) < min_value)
-    jy_lim = jy!merge(0.0_num, jy, abs(jy) < min_value)
-    jz_lim = jz!merge(0.0_num, jz, abs(jz) < min_value)
-
     if (eta > 0) then
         !Determine the current from the magnetic field (after boundary conditions etc.)
-        ex(1:nx, 0:ny,0:nz) = ex(1:nx, 0:ny,0:nz) + eta*(jx_lim(1:nx, 0:ny,0:nz))! - jpx(1:nx, 0:ny,0:nz))
-        ey(0:nx, 1:ny,0:nz) = ey(0:nx, 1:ny,0:nz) + eta*(jy_lim(0:nx, 1:ny,0:nz))! - jpy(0:nx, 1:ny,0:nz))
-        ez(0:nx, 0:ny,1:nz) = ez(0:nx, 0:ny,1:nz) + eta*jz_lim(0:nx, 0:ny,1:nz)
+        ex(1:nx, 0:ny,0:nz) = ex(1:nx, 0:ny,0:nz) + eta*(jx(1:nx, 0:ny,0:nz))! - jpx(1:nx, 0:ny,0:nz))
+        ey(0:nx, 1:ny,0:nz) = ey(0:nx, 1:ny,0:nz) + eta*(jy(0:nx, 1:ny,0:nz))! - jpy(0:nx, 1:ny,0:nz))
+        ez(0:nx, 0:ny,1:nz) = ez(0:nx, 0:ny,1:nz) + eta*jz(0:nx, 0:ny,1:nz)
     end if
 
     !Add shearing (if necessary) directly onto this (averaged) field
@@ -220,8 +210,31 @@ SUBROUTINE calculate_electric()
     
     !Add electric field loaded in from elsewhere
     if (z_rank == 0) then
+        !ex(1:nx,0:ny,0) = surf_ex(1:nx,0:ny)
+        !ey(0:nx,1:ny,0) = surf_ey(0:nx,1:ny)
         ex(1:nx,0:ny,0) = surf_ex(1:nx,0:ny)
         ey(0:nx,1:ny,0) = surf_ey(0:nx,1:ny)
+
+    end if
+
+    if (x_rank == 0) then
+        ex(1,:,0) = 0.0_num
+        ey(0,:,0) = 0.0_num
+    end if
+
+    if (x_rank == x_procs-1) then
+        ex(nx,:,0) = 0.0_num
+        ey(nx,:,0) = 0.0_num
+    end if
+
+    if (y_rank == 0) then
+        ex(:,0,0) = 0.0_num
+        ey(:,1,0) = 0.0_num
+    end if
+
+    if (y_rank == y_procs-1) then
+        ex(:,ny,0) = 0.0_num
+        ey(:,ny,0) = 0.0_num
     end if
 
 
