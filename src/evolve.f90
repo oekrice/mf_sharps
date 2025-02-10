@@ -217,25 +217,25 @@ SUBROUTINE calculate_electric()
 
     end if
 
-    if (x_rank == 0) then
-        ex(1,:,0) = 0.0_num
-        ey(0,:,0) = 0.0_num
-    end if
-
-    if (x_rank == x_procs-1) then
-        ex(nx,:,0) = 0.0_num
-        ey(nx,:,0) = 0.0_num
-    end if
-
-    if (y_rank == 0) then
-        ex(:,0,0) = 0.0_num
-        ey(:,1,0) = 0.0_num
-    end if
-
-    if (y_rank == y_procs-1) then
-        ex(:,ny,0) = 0.0_num
-        ey(:,ny,0) = 0.0_num
-    end if
+!     if (x_rank == 0) then
+!         ex(1,:,0) = 0.0_num
+!         ey(0,:,0) = 0.0_num
+!     end if
+!
+!     if (x_rank == x_procs-1) then
+!         ex(nx,:,0) = 0.0_num
+!         ey(nx,:,0) = 0.0_num
+!     end if
+!
+!     if (y_rank == 0) then
+!         ex(:,0,0) = 0.0_num
+!         ey(:,1,0) = 0.0_num
+!     end if
+!
+!     if (y_rank == y_procs-1) then
+!         ex(:,ny,0) = 0.0_num
+!         ey(:,ny,0) = 0.0_num
+!     end if
 
 
 END SUBROUTINE calculate_electric

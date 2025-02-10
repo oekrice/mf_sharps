@@ -14,7 +14,7 @@ import time
 import matplotlib.pyplot as plt
 
 from init import compute_initial_condition
-from write_electric import compute_electrics, compute_inplane_helicity, read_boundary
+from write_electric import compute_electrics, compute_electrics_bounded, read_boundary, compute_inplane_helicity
 from scipy.io import netcdf_file
 from scipy.optimize import curve_fit
 from scipy.io import netcdf_file
@@ -60,10 +60,10 @@ mag_start = 0   #First magnetogram to start from
 
 normalise_inputs = True       #If True, will normalise all the magnetic fields such that the max radial component is 1. Also adresses flux balance.
 dothings = False
-check_data = False
+check_data = dothings
 recalculate_inputs = dothings   #Redo the interpolation from the SHARP inputs onto this grid
 recalculate_init = dothings       #Recalculates the initial potential field
-recalculate_boundary = True  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
+recalculate_boundary = dothings  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
 
 nx = 128
 
@@ -201,8 +201,8 @@ if check_data or not os.path.exists(sharps_directory + '%05d_raw/' % sharp_id):
         if os.path.exists('./parameters/raw_times%05d.npy' % sharp_id):
             #Check number of mags from the raw times
             nmags = len(np.load('./parameters/raw_times%05d.npy' % sharp_id))
-            print(nmags)
-            if os.path.exists(sharps_directory + '%05d_raw/%05d.nc' % (sharp_id, nmags-1)):
+            print(nmags, 'magnetograms required')
+            if os.path.exists(sharps_directory + '%05d_raw/%05d_%05d.nc' % (sharp_id, sharp_id, nmags-1)):
                 print('Data exists up to the end of the required time')
             else:
                 print('Data download incomplete. Trying to download remaining files...')
@@ -361,9 +361,7 @@ mag_root = sharps_directory + '%05d_mag/' % sharp_id
 #Compute lower boundary electrics for a zero omega, initially.
 #This will save out reference helicities, as well.
 if recalculate_boundary:
-    compute_electrics(run, init_number, mag_root, mag_times, omega = 0.0, start = 0, end = nmags-1, initialise = True, plot = False)
-
-stop
+    compute_electrics_bounded(run, init_number, mag_root, mag_times, omega = 0.0, start = 0, end = nmags-1, initialise = True, plot = False)
 
 bx, by, bz = read_boundary('./inits/init%03d.nc' % init_number)
 check = np.sum(compute_inplane_helicity(grid, bx, by, bz))
@@ -425,7 +423,7 @@ for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_
         omega_range = maxomega - minomega
         print('Running step from', block_start, 'to', block_end, 'omega = ', omega)
         print('Minmax', minomega, maxomega)
-        efield_data = compute_electrics(run, init_number, mag_root, mag_times, omega = omega, start = block_start, end = block_end, initialise = False, plot = False)
+        efield_data = compute_electrics_bounded(run, init_number, mag_root, mag_times, omega = omega, start = block_start, end = block_end, initialise = False, plot = False)
 
         variables[29] = block_start
         variables[30] = block_end

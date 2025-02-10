@@ -69,15 +69,16 @@ def sharp_info(sharp_id, root_fname):
 
 def balance_flux(field):
     #While retaining the sign of each cell, enforces proper flux balance. Can do this in the convert stage, alternatively.
-    fieldplus = field * [field >= 0]
-    fieldminus = field * [field < 0]
+    #This shouldn't be necessary if the initial data has been balanced
+    fieldplus = field[1:-1,1:-1] * [field[1:-1,1:-1] >= 0]
+    fieldminus = field[1:-1,1:-1] * [field[1:-1,1:-1] < 0]
 
     avg = (np.sum(fieldplus) - np.sum(fieldminus))/2
 
     fieldplus = fieldplus[0] * avg/np.sum(fieldplus)
     fieldminus = fieldminus[0] * -avg/np.sum(fieldminus)
 
-    return fieldplus + fieldminus
+    return np.array(fieldplus + fieldminus)
 
 #Want to import this as a function so just do it like that
 def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 10000, plot = False, normalise = False):
@@ -152,29 +153,29 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
 
         envelope[-1,:] = 0.0;envelope[0,:] = 0.0;envelope[:,0] = 0.0;envelope[:,-1] = 0.0
 
-        bx_smooth = bx_smooth*envelope
-        by_smooth = by_smooth*envelope
-        bz_smooth = bz_smooth*envelope
+        if True:
+            bx_smooth = bx_smooth*envelope
+            by_smooth = by_smooth*envelope
+            bz_smooth = bz_smooth*envelope
 
         #Interpolate onto the STAGGERED grid (just linearly)
         xs_import = np.linspace(grid.x0, grid.x1, bx_smooth.shape[0])
         ys_import = np.linspace(grid.y0, grid.y1, by_smooth.shape[1])
 
         X, Y = np.meshgrid(grid.xs, grid.yc, indexing = 'ij')
-        bx_fn = RegularGridInterpolator((xs_import, ys_import), bx_smooth, bounds_error = False, method = 'linear', fill_value = 0.0)
+        bx_fn = RegularGridInterpolator((xs_import, ys_import), bx_smooth, bounds_error = False, method = 'linear', fill_value = None)
         bx_out = bx_fn((X,Y))   #Difference now interpolated to the new grid
 
-
         X, Y = np.meshgrid(grid.xc, grid.ys, indexing = 'ij')
-        by_fn = RegularGridInterpolator((xs_import, ys_import), by_smooth, bounds_error = False, method = 'linear', fill_value = 0.0)
+        by_fn = RegularGridInterpolator((xs_import, ys_import), by_smooth, bounds_error = False, method = 'linear', fill_value = None)
         by_out = by_fn((X,Y))   #Difference now interpolated to the new grid
 
         X, Y = np.meshgrid(grid.xc, grid.yc, indexing = 'ij')
-        bz_fn = RegularGridInterpolator((xs_import, ys_import), bz_smooth, bounds_error = False, method = 'linear', fill_value = 0.0)
+        bz_fn = RegularGridInterpolator((xs_import, ys_import), bz_smooth, bounds_error = False, method = 'linear', fill_value = None)
         bz_out = bz_fn((X,Y))   #Difference now interpolated to the new grid
 
         if normalise:
-            bz_out = balance_flux(bz_out)
+            bz_out[1:-1,1:-1] = balance_flux(bz_out)
             if fi == start:
                 norm_factor = np.max(np.abs(bz_out))
             bx_out = bx_out/norm_factor

@@ -456,6 +456,7 @@ SUBROUTINE export_magnetogram(mag_num)
         call MPI_BARRIER(comm,ierr)
 
         if (proc_num == proc_write .and. z_down < 0) then   !Make sure it's definitely at the bottom
+
             call try(nf90_open(trim(mag_filename), nf90_write, ncid))
 
             call try(nf90_inq_varid(ncid, 'bx', vid))
