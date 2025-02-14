@@ -10,6 +10,8 @@ from scipy.interpolate import RegularGridInterpolator
 from scipy.fft import fft, ifft2, fft2, ifft
 import os
 from scipy.ndimage import gaussian_filter
+
+from write_electric import compute_inplane_helicity
 matplotlib.rcParams['text.usetex'] = True
 
 
@@ -19,11 +21,9 @@ class Grid():
 
         paras = np.loadtxt('parameters/variables%03d.txt' % run)
 
-        import_resolution = 128
-
         #Define the grid onto which the electric field should be outputted
-        self.nx = import_resolution
-        self.ny = import_resolution
+        self.nx = int(paras[1])
+        self.ny = int(paras[2])
 
         self.x0 = paras[12]; self.x1 = paras[13]
         self.y0 = paras[14]; self.y1 = paras[15]
@@ -40,18 +40,18 @@ class Grid():
         self.dx = self.xs[1] - self.xs[0]
         self.dy = self.ys[1] - self.ys[0]
 
-        self.xs_import = np.linspace(self.x0, self.x1, import_resolution+1)
-        self.ys_import = np.linspace(self.y0, self.y1, import_resolution+1)
+        self.xs_import = np.linspace(self.x0, self.x1, self.nx+1)
+        self.ys_import = np.linspace(self.y0, self.y1, self.ny+1)
 
 
         self.dx_import = self.xs[1] - self.xs[0]
         self.dy_import = self.ys[1] - self.ys[0]
 
-        self.xc_import = np.linspace(self.x0 - self.dx/2, self.x1 + self.dx/2, import_resolution+2)
-        self.yc_import = np.linspace(self.y0 - self.dy/2, self.y1 + self.dy/2, import_resolution+2)
+        self.xc_import = np.linspace(self.x0 - self.dx/2, self.x1 + self.dx/2, self.nx+2)
+        self.yc_import = np.linspace(self.y0 - self.dy/2, self.y1 + self.dy/2, self.ny+2)
 
 
-class compute_inplane_helicity():
+class compare_mags():
     #Uses all three components of the magnetic field to give values for A.B at EACH of the input timesteps.
     #Requires the script from Chris' flt code
     def __init__(self, run, snap = 0, envelope_factor = -1):
@@ -192,8 +192,15 @@ class compute_inplane_helicity():
                 #This vector potential should be reasonably OK... Need code to test though
 
                 hfield = np.sqrt(np.abs(ax0*bx0 + ay0*by0 + az0*bz0))
+                hfield = np.sign(ax0*bx0 + ay0*by0 + az0*bz0)*np.sqrt(np.abs(ax0*bx0 + ay0*by0 + az0*bz0))
+                hfield = ax0*bx0 + ay0*by0 + az0*bz0
 
-                print('Hfield', np.sum(hfield))
+                #Determine padding distance
+                if ri == 0:
+                    pad_cells = int(np.sum(np.abs(bx0[ny//2,:]) < 1e-10)//2)
+
+                hsum = np.sum(hfield[pad_cells:-pad_cells,pad_cells:-pad_cells])
+                print('Hfield', np.sqrt(np.abs(hsum))*np.sign(hsum))
                 toplots = [bx0.T, by0.T, bz0.T, hfield.T]
 
                 for plot in range(4):
@@ -246,6 +253,6 @@ if len(sys.argv) > 1:
 else:
     snap = -1
 
-compute_inplane_helicity(0, snap = snap,envelope_factor = -1.0)
+compare_mags(0, snap = snap,envelope_factor = -1.0)
 
 

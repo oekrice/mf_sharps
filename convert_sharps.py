@@ -160,30 +160,27 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
         #Interpolate onto the STAGGERED grid (just linearly)
         #If padding, need to be more smart here
 
-        pad_distance = max(grid.x1, grid.y1)*pad_factor
+        pad_distance =  max(grid.x1, grid.y1) - max(grid.x1, grid.y1)/(1.0 + pad_factor)
         #envelope_factor = 1.0/pad_factor
 
-        xs_import = np.linspace(grid.x0, grid.x1, bx_smooth.shape[0])
-        ys_import = np.linspace(grid.y0, grid.y1, by_smooth.shape[1])
-
-        xs_pad = np.linspace(grid.x0 - pad_distance, grid.x1 + pad_distance, bx_smooth.shape[0])
-        ys_pad = np.linspace(grid.y0 - pad_distance, grid.y1 + pad_distance, by_smooth.shape[1])
+        xs_import = np.linspace(grid.x0+pad_distance, grid.x1-pad_distance, bx_smooth.shape[0])
+        ys_import = np.linspace(grid.y0+pad_distance, grid.y1-pad_distance, by_smooth.shape[1])
 
         X, Y = np.meshgrid(grid.xs, grid.yc, indexing = 'ij')
         bx_fn = RegularGridInterpolator((xs_import, ys_import), bx_smooth, bounds_error = False, method = 'linear', fill_value = 0.0)
-        bx_out = bx_fn((X*pad_factor,Y*pad_factor))   #Difference now interpolated to the new grid
+        bx_out = bx_fn((X,Y))   #Difference now interpolated to the new grid
 
         X, Y = np.meshgrid(grid.xc, grid.ys, indexing = 'ij')
         by_fn = RegularGridInterpolator((xs_import, ys_import), by_smooth, bounds_error = False, method = 'linear', fill_value = 0.0)
-        by_out = by_fn((X*pad_factor,Y*pad_factor))   #Difference now interpolated to the new grid
+        by_out = by_fn((X,Y))   #Difference now interpolated to the new grid
 
         X, Y = np.meshgrid(grid.xc, grid.yc, indexing = 'ij')
         bz_fn = RegularGridInterpolator((xs_import, ys_import), bz_smooth, bounds_error = False, method = 'linear', fill_value = 0.0)
-        bz_out = bz_fn((X*pad_factor,Y*pad_factor))   #Difference now interpolated to the new grid
+        bz_out = bz_fn((X,Y))   #Difference now interpolated to the new grid
 
-        toplot = bz_out.T
-        plt.pcolormesh(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
-        plt.show()
+        # toplot = bz_out.T
+        # plt.imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
+        # plt.show()
 
         if normalise:
             bz_out[1:-1,1:-1] = balance_flux(bz_out)

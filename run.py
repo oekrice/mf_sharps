@@ -51,7 +51,7 @@ except:
 sharp_id = 956 #1449
 
 sharps_directory = '/extra/tmp/trcn27/sharps/'
-max_mags = 200 #Maximum number of input magnetograms (won't convert all the import data)
+max_mags = 100 #Maximum number of input magnetograms (won't convert all the import data)
 time_per_snap = 0.05  #Time units per input minute
 
 mag_start = 0   #First magnetogram to start from
@@ -65,7 +65,7 @@ recalculate_inputs = dothings   #Redo the interpolation from the SHARP inputs on
 recalculate_init = dothings       #Recalculates the initial potential field
 recalculate_boundary = dothings  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
 
-nx = 196
+nx = 128
 
 #DYNAMIC SYSTEM PARAMETERS
 #-------------------------------------
@@ -80,7 +80,7 @@ nplots = -1
 
 nu0 = 10.0
 eta = 5e-4*nu0
-#eta = 10.0
+#eta = 1.0
 
 x0 = -100.0; x1 = 100.0   #Keep this as 100, no matter what the domain size is. Because that seemed to work.
 y0 = -100.0; y1 = 100.0
@@ -227,15 +227,17 @@ import_nx, import_ny, start, end = sharp_info(sharp_id, sharps_directory)
 print('Using raw data from ', start, ' to ', end)
 #Use the import ratios to establish the grid.
 #Resolutions will be based on the ratio of the imported data, based on the nx above
-aspect = import_ny/import_nx
-ny = int(nx*aspect)
+aspect_init = import_ny/import_nx
+#Account for padding around the initial magnetogram. Assuming nx is longer. Which it might not be.
+if aspect_init < 1.0:
+    new_aspect = (aspect_init + pad_factor)/(1.0 + pad_factor)
+else:
+    new_aspect = (1.0 + pad_factor)/(aspect_init + pad_factor)
+
+print('Zero padding factor', pad_factor, 'aspects', aspect_init, new_aspect)
+ny = int(nx*new_aspect)
 ny = 4*(ny//4)
 nz = min(nx, ny)
-
-#Add padding factor
-
-
-
 
 print('Variables established. Making grid.')
 print('New grid resolutions:', nx, ny, nz)
@@ -250,11 +252,11 @@ if os.path.exists(sharps_directory + '%05d_mag/' % sharp_id):
         print('Importing existing converted magnetic field...')
     else:
         print('Converting raw SHARPS onto this grid')
-        convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, pad_factor = 0)
+        convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, pad_factor = pad_factor)
 
 else:
     print('Converting raw SHARPS onto this grid')
-    convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, pad_factor = 0)
+    convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, pad_factor = pad_factor)
 
 nmags = len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id))
 
@@ -364,14 +366,21 @@ print('____________________________________________')
 print('Calculating initial boundary conditions...')
 
 mag_root = sharps_directory + '%05d_mag/' % sharp_id
+pad_cells = int(np.sum(np.abs(bz[grid.ny//2,:]) < 1e-10)//2) - 1   #Number of cells from each boundary to ignore
 
+print('Pad cells', pad_cells)
 #Compute lower boundary electrics for a zero omega, initially.
 #This will save out reference helicities, as well.
 if recalculate_boundary:
-    compute_electrics_bounded(run, init_number, mag_root, mag_times, omega = 0.0, start = 0, end = nmags-1, initialise = True, plot = False, envelope_factor = envelope_factor)
+    compute_electrics_bounded(run, init_number, mag_root, mag_times, omega = 0.0, start = 0, end = nmags-1, initialise = True, plot = False, pad_cells = pad_cells)
 
 bx, by, bz = read_boundary('./inits/init%03d.nc' % init_number)
-check = np.sum(compute_inplane_helicity(grid, bx, by, bz))
+
+hfield = compute_inplane_helicity(grid, bx, by, bz)
+hsum = np.sum(hfield[pad_cells:-pad_cells,pad_cells:-pad_cells])
+
+check = np.sqrt(np.abs(hsum))*np.sign(hsum)
+
 
 if mag_start != 0:
     halls = np.load('./hdata/halls%03d.npy' % run)
@@ -430,7 +439,7 @@ for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_
         omega_range = maxomega - minomega
         print('Running step from', block_start, 'to', block_end, 'omega = ', omega)
         print('Minmax', minomega, maxomega)
-        efield_data = compute_electrics_bounded(run, init_number, mag_root, mag_times, omega = omega, start = block_start, end = block_end, initialise = False, plot = False, envelope_factor = envelope_factor)
+        efield_data = compute_electrics_bounded(run, init_number, mag_root, mag_times, omega = omega, start = block_start, end = block_end, initialise = False, plot = False, pad_cells = pad_cells)
 
         variables[29] = block_start
         variables[30] = block_end
@@ -449,7 +458,11 @@ for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_
         end_fname = './mf_mags/%03d/%04d.nc' % (run, block_end)
 
         bx, by, bz = read_boundary(end_fname)
-        check = np.sum(compute_inplane_helicity(grid, bx, by, bz))
+        hfield = compute_inplane_helicity(grid, bx, by, bz)
+        hsum = np.sum(hfield[pad_cells:-pad_cells,pad_cells:-pad_cells])
+
+        check = np.sqrt(np.abs(hsum))*np.sign(hsum)
+
         target = hrefs[block_end]
 
         halls[block_end] = check

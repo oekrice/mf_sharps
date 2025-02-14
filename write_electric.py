@@ -48,24 +48,6 @@ def compute_inplane_helicity(grid, bx, by, bz, plot = False, envelope_factor = -
     by0 = 0.5*(by[1:-1,1:] + by[1:-1,:-1])
     bz0 = bz[1:-1,1:-1]
 
-    if envelope_factor > 0:
-        input_xs = np.linspace(-1,1,bx0.shape[0])
-        input_ys = np.linspace(-1,1,bx0.shape[1])
-        #Force smoothly to zero at the edges of the domain, to stop boundary mess appearing
-        X, Y = np.meshgrid(input_xs, input_ys, indexing = 'ij')
-        edge = envelope_factor; steep = 20.0
-        nx = bx0.shape[0]
-
-        envelope = np.zeros((bx0.shape))
-        envelope[bx0.shape[0]//4:3*bx0.shape[0]//4, bx0.shape[1]//4:3*bx0.shape[1]//4] = 1.0
-
-        #envelope = 0.5-0.5*np.tanh(np.maximum(steep*(X**2-edge**2), steep*(Y**2-edge**2)))
-
-        #envelope[-1,:] = 0.0; envelope[0,:] = 0.0; envelope[:,0] = 0.0; envelope[:,-1] = 0.0
-
-        bx0 = bx0*envelope
-        by0 = by0*envelope
-        bz0 = bz0*envelope
 
     def norm2d(vec):
         mag = np.linalg.norm(vec)
@@ -139,7 +121,10 @@ def compute_inplane_helicity(grid, bx, by, bz, plot = False, envelope_factor = -
         plt.tight_layout()
         plt.show()
     #Should be proportional to the magnetic field strength, so this helicity requires a square root. I'm pretty sure the scaling is OK here...
-    hfield = np.sqrt(np.abs(ax0*bx0 + ay0*by0 + az0*bz0))
+
+    #Try this with the signs as well -- if roughly diplolar there should be a clear sign... Maybe.
+
+    hfield = ax0*bx0 + ay0*by0 + az0*bz0
 
     return hfield
 
@@ -337,7 +322,7 @@ def transform(rhs, basis, n_x, n_y):
 
 class compute_electrics_bounded():
     #Similarly to the original, but doesn;t use a Fourier transform as the domain has closed boundaries
-    def __init__(self, run, init_number, mag_root, mag_times, omega = 0., start = 0, end = 500, initialise = True, plot = False, envelope_factor = -1):
+    def __init__(self, run, init_number, mag_root, mag_times, omega = 0., start = 0, end = 500, initialise = True, plot = False, envelope_factor = -1, pad_cells = 0):
 
         grid = Grid(run)  #Establish grid (on new scales)
 
@@ -594,7 +579,9 @@ class compute_electrics_bounded():
                 by = np.swapaxes(data.variables['by'][:], 0, 1)
                 bz = np.swapaxes(data.variables['bz'][:], 0, 1)
                 href = compute_inplane_helicity(grid, bx, by, bz, envelope_factor = envelope_factor)
-                hrefs.append(np.sum(href))
+                hsum = np.sum(href[pad_cells:-pad_cells,pad_cells:-pad_cells])
+
+                hrefs.append(np.sqrt(np.abs(hsum))*np.sign(hsum))
                 trefs.append(mag_times[snap])
 
         if initialise:  #Calculate final one
@@ -604,7 +591,8 @@ class compute_electrics_bounded():
             by = np.swapaxes(data.variables['by'][:], 0, 1)
             bz = np.swapaxes(data.variables['bz'][:], 0, 1)
             href = compute_inplane_helicity(grid, bx, by, bz, envelope_factor = envelope_factor)
-            hrefs.append(np.sum(href))
+            hsum = np.sum(href[pad_cells:-pad_cells,pad_cells:-pad_cells])
+            hrefs.append(np.sqrt(np.abs(hsum))*np.sign(hsum))
             trefs.append(mag_times[snap+1])
 
 
