@@ -22,8 +22,6 @@ from scipy.io import netcdf_file
 from obtain_sharps import obtain_sharp, lookup_sharp
 from convert_sharps import sharp_info, convert_sharp
 
-
-
 if len(sys.argv) > 1:
     run = int(sys.argv[1])
 else:
@@ -53,23 +51,25 @@ except:
 sharp_id = 956 #1449
 
 sharps_directory = '/extra/tmp/trcn27/sharps/'
-max_mags = 100 #Maximum number of input magnetograms (won't convert all the import data)
+max_mags = 200 #Maximum number of input magnetograms (won't convert all the import data)
 time_per_snap = 0.05  #Time units per input minute
 
 mag_start = 0   #First magnetogram to start from
+envelope_factor = -1.0 #If positive, smoothly drops the input magnetogram to zero near the boundaries, at distance from 0 to 1 near the edge. Also adds some padding cells maybe.
+pad_factor = 0.25 #Adds a given padding distance to the x,y dimensions to allow the electric fields to match there. 0 Does nothing.
 
 normalise_inputs = True       #If True, will normalise all the magnetic fields such that the max radial component is 1. Also adresses flux balance.
-dothings = False
+dothings = True
 check_data = dothings
 recalculate_inputs = dothings   #Redo the interpolation from the SHARP inputs onto this grid
 recalculate_init = dothings       #Recalculates the initial potential field
 recalculate_boundary = dothings  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
 
-nx = 128
+nx = 196
 
 #DYNAMIC SYSTEM PARAMETERS
 #-------------------------------------
-voutfact = 0.0   #Outflow speed. If negative, will go for as much as possible without instabilities
+voutfact = -1.0   #Outflow speed. If negative, will go for as much as possible without instabilities
 shearfact = 0.0#3.7e-5   #factor by which to change the imported 'speed'
 eta0 = 0.0
 
@@ -78,8 +78,8 @@ tstart = 0.0
 ndiags = 1000
 nplots = -1
 
-nu0 = 0.0
-eta = 1.0#5e-4*nu0
+nu0 = 10.0
+eta = 5e-4*nu0
 #eta = 10.0
 
 x0 = -100.0; x1 = 100.0   #Keep this as 100, no matter what the domain size is. Because that seemed to work.
@@ -232,6 +232,11 @@ ny = int(nx*aspect)
 ny = 4*(ny//4)
 nz = min(nx, ny)
 
+#Add padding factor
+
+
+
+
 print('Variables established. Making grid.')
 print('New grid resolutions:', nx, ny, nz)
 
@@ -245,11 +250,11 @@ if os.path.exists(sharps_directory + '%05d_mag/' % sharp_id):
         print('Importing existing converted magnetic field...')
     else:
         print('Converting raw SHARPS onto this grid')
-        convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs)
+        convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, pad_factor = 0)
 
 else:
     print('Converting raw SHARPS onto this grid')
-    convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs)
+    convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, pad_factor = 0)
 
 nmags = len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id))
 
@@ -340,7 +345,9 @@ bz = np.swapaxes(data.variables['bz'][:],0,1)
 
 if recalculate_init or not os.path.exists('./inits/init%03d.nc' % init_number):
     print('Calculating initial condition...')
+
     init = compute_initial_condition(grid, bz, run, boundary_error_limit = 1e-6, init_filename = './inits/init%03d.nc' % init_number)
+
 else:
     #Put a check in to make sure the resolutions are correct
     data = netcdf_file('./inits/init%03d.nc' % init_number, 'r', mmap=False)
@@ -361,7 +368,7 @@ mag_root = sharps_directory + '%05d_mag/' % sharp_id
 #Compute lower boundary electrics for a zero omega, initially.
 #This will save out reference helicities, as well.
 if recalculate_boundary:
-    compute_electrics_bounded(run, init_number, mag_root, mag_times, omega = 0.0, start = 0, end = nmags-1, initialise = True, plot = False)
+    compute_electrics_bounded(run, init_number, mag_root, mag_times, omega = 0.0, start = 0, end = nmags-1, initialise = True, plot = False, envelope_factor = envelope_factor)
 
 bx, by, bz = read_boundary('./inits/init%03d.nc' % init_number)
 check = np.sum(compute_inplane_helicity(grid, bx, by, bz))
@@ -423,7 +430,7 @@ for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_
         omega_range = maxomega - minomega
         print('Running step from', block_start, 'to', block_end, 'omega = ', omega)
         print('Minmax', minomega, maxomega)
-        efield_data = compute_electrics_bounded(run, init_number, mag_root, mag_times, omega = omega, start = block_start, end = block_end, initialise = False, plot = False)
+        efield_data = compute_electrics_bounded(run, init_number, mag_root, mag_times, omega = omega, start = block_start, end = block_end, initialise = False, plot = False, envelope_factor = envelope_factor)
 
         variables[29] = block_start
         variables[30] = block_end

@@ -40,13 +40,32 @@ def read_boundary(fname):
     return bx, by, bz
 
 
-def compute_inplane_helicity(grid, bx, by, bz, plot = False):
+def compute_inplane_helicity(grid, bx, by, bz, plot = False, envelope_factor = -1):
     #Need to average these to grid centres to get the FFT to work
     #Probably should just do on the interior - so resolution at the raw values
 
     bx0 = 0.5*(bx[1:,1:-1] + bx[:-1,1:-1])
     by0 = 0.5*(by[1:-1,1:] + by[1:-1,:-1])
     bz0 = bz[1:-1,1:-1]
+
+    if envelope_factor > 0:
+        input_xs = np.linspace(-1,1,bx0.shape[0])
+        input_ys = np.linspace(-1,1,bx0.shape[1])
+        #Force smoothly to zero at the edges of the domain, to stop boundary mess appearing
+        X, Y = np.meshgrid(input_xs, input_ys, indexing = 'ij')
+        edge = envelope_factor; steep = 20.0
+        nx = bx0.shape[0]
+
+        envelope = np.zeros((bx0.shape))
+        envelope[bx0.shape[0]//4:3*bx0.shape[0]//4, bx0.shape[1]//4:3*bx0.shape[1]//4] = 1.0
+
+        #envelope = 0.5-0.5*np.tanh(np.maximum(steep*(X**2-edge**2), steep*(Y**2-edge**2)))
+
+        #envelope[-1,:] = 0.0; envelope[0,:] = 0.0; envelope[:,0] = 0.0; envelope[:,-1] = 0.0
+
+        bx0 = bx0*envelope
+        by0 = by0*envelope
+        bz0 = bz0*envelope
 
     def norm2d(vec):
         mag = np.linalg.norm(vec)
@@ -318,7 +337,7 @@ def transform(rhs, basis, n_x, n_y):
 
 class compute_electrics_bounded():
     #Similarly to the original, but doesn;t use a Fourier transform as the domain has closed boundaries
-    def __init__(self, run, init_number, mag_root, mag_times, omega = 0., start = 0, end = 500, initialise = True, plot = False):
+    def __init__(self, run, init_number, mag_root, mag_times, omega = 0., start = 0, end = 500, initialise = True, plot = False, envelope_factor = -1):
 
         grid = Grid(run)  #Establish grid (on new scales)
 
@@ -365,6 +384,11 @@ class compute_electrics_bounded():
             bfield1 = np.swapaxes(data.variables['bz'][:], 0, 1)
             bfield1[1:-1,1:-1] = balance_flux(bfield1)
 
+
+            bx_0 = np.swapaxes(data.variables['bx'][:], 0, 1)
+            by_0 = np.swapaxes(data.variables['by'][:], 0, 1)
+
+            data.close()
             bfield_fname = '%s%04d.nc' % (data_directory, snap + 1)
 
             try:
@@ -376,6 +400,11 @@ class compute_electrics_bounded():
                 continue
 
             bfield2 = np.swapaxes(data.variables['bz'][:], 0, 1)
+
+            bx_1 = np.swapaxes(data.variables['bx'][:], 0, 1)
+            by_1 = np.swapaxes(data.variables['by'][:], 0, 1)
+
+            data.close()
 
             bfield2[1:-1,1:-1] = balance_flux(bfield2)
 
@@ -390,7 +419,7 @@ class compute_electrics_bounded():
 
             for n_x in range(0,len(w_x)):
                 for n_y in range(0,len(w_y)):
-                    if n_x + n_y > 0:
+                    if abs(w_x[n_x] + w_y[n_y]) > 1e-10:
                         basis = v_x[:,n_x][:,np.newaxis]*v_y[:,n_y][np.newaxis,:]
                         G[1:-1,1:-1] = G[1:-1,1:-1] + (1.0/(w_x[n_x]/grid.dx**2 + w_y[n_y]/grid.dy**2))*basis*transform(-diff[1:-1,1:-1], basis, n_x, n_y)
                         #comp[1:-1,1:-1] = comp[1:-1,1:-1] + (1.0)*basis*transform(-diff[1:-1,1:-1], basis, n_x, n_y)
@@ -403,7 +432,9 @@ class compute_electrics_bounded():
             ex, ey = grid.curl_inplane(G)
             curl_test = grid.curl_E(ex, ey)
 
-            if plot:
+            print('Curl test', np.max(np.abs(curl_test + diff)))
+
+            if False:
                 fig, axs = plt.subplots(3)
 
                 im = axs[0].pcolormesh(curl_test[1:-1,1:-1] )
@@ -415,6 +446,12 @@ class compute_electrics_bounded():
 
                 plt.tight_layout()
                 plt.show()
+
+            def add_crude_grad(ex, ey):
+                #Using existing ex and ey, add on a very crude gradient term to minimise the errors
+                ex_means = 0.5*(np.mean(ex[:,0]) + np.mean(ex[:,-1]))
+                ey_means = 0.5*(np.mean(ey[0,:]) + np.mean(ey[-1,:]))
+                return ex - ex_means, ey - ey_means
             #Define distribution of the divergence of the electric field.
             #Following Cheung and De Rosa, just proportional to the vertical (averaged to points) magnetic field
 
@@ -424,6 +461,19 @@ class compute_electrics_bounded():
             # D = omega*(bf)
             #
             # div_test = grid.div_E(ex, ey)
+
+            F = np.zeros((grid.nx+2, grid.ny+2))
+            #comp = np.zeros((grid.nx+2, grid.ny+2))
+
+            # for n_x in range(0,len(w_x)):
+            #     for n_y in range(0,len(w_y)):
+            #         if abs(w_x[n_x] + w_y[n_y]) > 1e-10:
+            #             basis = v_x[:,n_x][:,np.newaxis]*v_y[:,n_y][np.newaxis,:]
+            #             F[1:-1,1:-1] = F[1:-1,1:-1] + (1.0/(w_x[n_x]/grid.dx**2 + w_y[n_y]/grid.dy**2))*basis*transform(-diff[1:-1,1:-1], basis, n_x, n_y)
+            #             #comp[1:-1,1:-1] = comp[1:-1,1:-1] + (1.0)*basis*transform(-diff[1:-1,1:-1], basis, n_x, n_y)
+
+            F[0,:] = F[1,:]; F[-1,:] = F[-2,:]
+            F[:,0] = F[:,1]; F[:,-1] = F[:,-2]
             # phi = ft.point_transform(-div_test + D)
             # correct_x, correct_y = grid.grad(phi)
             # ex += correct_x
@@ -431,29 +481,72 @@ class compute_electrics_bounded():
             #
             # div_test = grid.div_E(ex, ey)
 
-            if plot:
 
-                if np.max(np.abs(curl_test[1:-1,1:-1] + diff[1:-1,1:-1])) > 1e-10:
-                    raise Exception('Electric field calculation failed')
-                if np.max(np.abs(div_test[1:-1,1:-1] - D[1:-1,1:-1])) > 1e-10:
-                    raise Exception('Electric field calculation failed')
+            #if np.max(np.abs(curl_test[1:-1,1:-1] + diff[1:-1,1:-1])) > 1e-10:
+            #    raise Exception('Electric field calculation failed')
+            #if np.max(np.abs(div_test[1:-1,1:-1] - D[1:-1,1:-1])) > 1e-10:
+            #    raise Exception('Electric field calculation failed')
 
-                print(bfield_fname)
-                print('Curl test', np.max(np.abs(curl_test[1:-1,1:-1] + diff[1:-1,1:-1])))
-                print('Div Test', np.max(np.abs(div_test[1:-1,1:-1] - D[1:-1,1:-1])))
-                print('____________________________________________')
+            # print(bfield_fname)
+            # print('Curl test', np.max(np.abs(curl_test[1:-1,1:-1] + diff[1:-1,1:-1])))
+            # print('Div Test', np.max(np.abs(div_test[1:-1,1:-1] - D[1:-1,1:-1])))
+            # print('____________________________________________')
 
             curl_test = grid.curl_E(ex, ey)
 
+            #ex, ey = add_crude_grad(ex, ey)
+
             #print('dx', grid.dx, 'dy', grid.dy)
+
+            if False:
+                fig, ax = plt.subplots(3)
+
+                im = ax[0].pcolormesh(diff.T, cmap = 'seismic', vmin = -np.max(np.abs(diff)), vmax = np.max(np.abs(diff)))
+                ax[0].set_title('dBdt')
+                plt.colorbar(im, ax=  ax[0])
+
+                im = ax[1].pcolormesh(ex.T, cmap = 'seismic', vmin = -np.max(np.abs(ex)), vmax = np.max(np.abs(ex)))
+                ax[1].set_title('Ex')
+                plt.colorbar(im, ax=  ax[1])
+
+                im = ax[2].pcolormesh(ey.T, cmap = 'seismic', vmin = -np.max(np.abs(ey)), vmax = np.max(np.abs(ey)))
+                plt.colorbar(im, ax=  ax[2])
+                ax[2].set_title('Ey')
+                plt.tight_layout()
+                plt.show()
+
             #Swap sign of E, as that seems to be the way forward.
             ex = -ex
             ey = -ey
 
+            if False:   #Constrain to envelope (removes exact solution, unfortunately)
+
+                input_xs = np.linspace(-1,1,ex.shape[0])
+                input_ys = np.linspace(-1,1,ex.shape[1])
+
+                X, Y = np.meshgrid(input_xs, input_ys, indexing = 'ij')
+                edge = envelope_factor; steep = 20.0
+                envelope = 0.5-0.5*np.tanh(np.maximum(steep*(X**2-edge**2), steep*(Y**2-edge**2)))
+
+                envelope[-1,:] = 0.0;envelope[0,:] = 0.0;envelope[:,0] = 0.0;envelope[:,-1] = 0.0
+
+                ex = ex*envelope
+
+                input_xs = np.linspace(-1,1,ey.shape[0])
+                input_ys = np.linspace(-1,1,ey.shape[1])
+
+                X, Y = np.meshgrid(input_xs, input_ys, indexing = 'ij')
+                edge = envelope_factor; steep = 20.0
+                envelope = 0.5-0.5*np.tanh(np.maximum(steep*(X**2-edge**2), steep*(Y**2-edge**2)))
+
+                envelope[-1,:] = 0.0;envelope[0,:] = 0.0;envelope[:,0] = 0.0;envelope[:,-1] = 0.0
+
+                ey = ey*envelope
+
             if False:
                 plt.pcolormesh(ey, cmap = 'seismic', vmin = -np.max(np.abs(ey)), vmax = np.max(np.abs(ey)))
                 plt.savefig('plots/ey%d.png' % snap)
-                plt.close()
+                plt.show()
 
                 plt.pcolormesh(ex, cmap = 'seismic', vmin = -np.max(np.abs(ex)), vmax = np.max(np.abs(ex)))
                 plt.savefig('plots/ex%d.png' % snap)
@@ -482,6 +575,16 @@ class compute_electrics_bounded():
             vid = fid.createVariable('ey', 'd', ('yc','xs'))
             vid[:] = np.swapaxes(ey, 0, 1)
 
+            vid = fid.createVariable('bx_0', 'd', ('yc','xs'))
+            vid[:] = np.swapaxes(bx_0, 0, 1)
+            vid = fid.createVariable('by_0', 'd', ('ys','xc'))
+            vid[:] = np.swapaxes(by_0, 0, 1)
+
+            vid = fid.createVariable('bx_1', 'd', ('yc','xs'))
+            vid[:] = np.swapaxes(bx_1, 0, 1)
+            vid = fid.createVariable('by_1', 'd', ('ys','xc'))
+            vid[:] = np.swapaxes(by_1, 0, 1)
+
             fid.close()
 
             if initialise:  #Calculate reference helicities
@@ -490,7 +593,7 @@ class compute_electrics_bounded():
                 bx = np.swapaxes(data.variables['bx'][:], 0, 1)
                 by = np.swapaxes(data.variables['by'][:], 0, 1)
                 bz = np.swapaxes(data.variables['bz'][:], 0, 1)
-                href = compute_inplane_helicity(grid, bx, by, bz)
+                href = compute_inplane_helicity(grid, bx, by, bz, envelope_factor = envelope_factor)
                 hrefs.append(np.sum(href))
                 trefs.append(mag_times[snap])
 
@@ -500,11 +603,12 @@ class compute_electrics_bounded():
             bx = np.swapaxes(data.variables['bx'][:], 0, 1)
             by = np.swapaxes(data.variables['by'][:], 0, 1)
             bz = np.swapaxes(data.variables['bz'][:], 0, 1)
-            href = compute_inplane_helicity(grid, bx, by, bz)
+            href = compute_inplane_helicity(grid, bx, by, bz, envelope_factor = envelope_factor)
             hrefs.append(np.sum(href))
             trefs.append(mag_times[snap+1])
 
-        print('Electric fields', start, ' to ', end, ' calculated and saved.')
+
+        print('Electric fields', start, ' to ', end, ' calculated and saved.', envelope_factor)
         if initialise:
             np.save('./hdata/h_ref.npy', np.array(hrefs))
             np.save('./hdata/t_ref.npy', np.array(trefs))
@@ -635,8 +739,8 @@ class compute_electrics():
                 input_ys = np.linspace(-1,1,ex.shape[1])
 
                 X, Y = np.meshgrid(input_xs, input_ys, indexing = 'ij')
-                edge = 0.9; steep = 20.0
-                envelope = 0.5-0.5*np.tanh(np.maximum(steep*(X**2-edge), steep*(Y**2-edge)))
+                edge = envelope_factor; steep = 20.0
+                envelope = 0.5-0.5*np.tanh(np.maximum(steep*(X**2-edge**2), steep*(Y**2-edge**2)))
 
                 envelope[-1,:] = 0.0;envelope[0,:] = 0.0;envelope[:,0] = 0.0;envelope[:,-1] = 0.0
 
@@ -646,14 +750,14 @@ class compute_electrics():
                 input_ys = np.linspace(-1,1,ey.shape[1])
 
                 X, Y = np.meshgrid(input_xs, input_ys, indexing = 'ij')
-                edge = 0.9; steep = 20.0
-                envelope = 0.5-0.5*np.tanh(np.maximum(steep*(X**2-edge), steep*(Y**2-edge)))
+                edge = envelope_factor; steep = 20.0
+                envelope = 0.5-0.5*np.tanh(np.maximum(steep*(X**2-edge**2), steep*(Y**2-edge**2)))
 
                 envelope[-1,:] = 0.0;envelope[0,:] = 0.0;envelope[:,0] = 0.0;envelope[:,-1] = 0.0
 
                 ey = ey*envelope
 
-            if False:
+            if True:
                 plt.pcolormesh(ey, cmap = 'seismic', vmin = -np.max(np.abs(ey)), vmax = np.max(np.abs(ey)))
                 plt.savefig('plots/ey%d.png' % snap)
                 plt.close()
@@ -693,7 +797,7 @@ class compute_electrics():
                 bx = np.swapaxes(data.variables['bx'][:], 0, 1)
                 by = np.swapaxes(data.variables['by'][:], 0, 1)
                 bz = np.swapaxes(data.variables['bz'][:], 0, 1)
-                href = compute_inplane_helicity(grid, bx, by, bz)
+                href = compute_inplane_helicity(grid, bx, by, bz, envelope_factor = envelope_factor)
                 hrefs.append(np.sum(href))
                 trefs.append(mag_times[snap])
 
@@ -703,7 +807,7 @@ class compute_electrics():
             bx = np.swapaxes(data.variables['bx'][:], 0, 1)
             by = np.swapaxes(data.variables['by'][:], 0, 1)
             bz = np.swapaxes(data.variables['bz'][:], 0, 1)
-            href = compute_inplane_helicity(grid, bx, by, bz)
+            href = compute_inplane_helicity(grid, bx, by, bz, envelope_factor = envelope_factor)
             hrefs.append(np.sum(href))
             trefs.append(mag_times[snap+1])
 

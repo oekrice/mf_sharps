@@ -54,6 +54,7 @@ PROGRAM main
     do block_num = mag_min, mag_max-1
         tstart = mag_times(block_num) ; tend = mag_times(block_num+1)
         CALL import_surface_electric(block_num, 1.0_num/(tend - tstart))
+        CALL import_surface_magnetic(block_num)
         t = tstart
         block_dt = (tend-tstart)/(int((tend-tstart)/dt) + 1)
         nt = int((tend-tstart)/block_dt)
@@ -66,6 +67,7 @@ PROGRAM main
         diag_ideal_time = diag_num*tmax/ndiags
 
         do n = 0, nt-1  ! Actually run the code
+            mag_ratio = (float(n) + 0.5_num)/nt
             CALL timestep()  !Does everything except the actual timestep (for diagnostic reasons)
             !Check whether diagnostics or a snapshot is necessary
             if (t - block_dt < diag_ideal_time .and. t .ge. diag_ideal_time) then

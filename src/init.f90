@@ -154,6 +154,10 @@ SUBROUTINE allocate_arrays()
     allocate(surf_vx(0:nx,0:ny)); allocate(surf_vy(0:nx,0:ny)); allocate(surf_vz(0:nx,0:ny))
     allocate(surf_ex(0:nx+1,-1:ny+1)); allocate(surf_ey(-1:nx+1,0:ny+1))
 
+    allocate(surf_bx0(-1:nx+1,0:ny+1)); allocate(surf_bx1(-1:nx+1,0:ny+1))
+    allocate(surf_by0(0:nx+1,-1:ny+1)); allocate(surf_by1(0:nx+1,-1:ny+1))
+    allocate(surf_bx(-1:nx+1,0:ny+1)); allocate(surf_by(0:nx+1,-1:ny+1))
+
     bx = 0.0_num; by = 0.0_num; bz = 0.0_num
 
 END SUBROUTINE allocate_arrays

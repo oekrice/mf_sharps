@@ -111,6 +111,11 @@ MODULE shared_data
     REAL(num), DIMENSION(:), ALLOCATABLE:: mag_times
     REAL(num):: max_velocity
 
+    !Lbound magfield
+    REAL(num), DIMENSION(:,:), ALLOCATABLE:: surf_bx0, surf_bx1, surf_by0, surf_by1
+    REAL(num), DIMENSION(:,:), ALLOCATABLE:: surf_bx, surf_by
+    REAL(num):: mag_ratio
+
 !*******************************************************************************
 END MODULE shared_data
 !*******************************************************************************

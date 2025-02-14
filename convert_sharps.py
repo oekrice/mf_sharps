@@ -70,6 +70,14 @@ def sharp_info(sharp_id, root_fname):
 def balance_flux(field):
     #While retaining the sign of each cell, enforces proper flux balance. Can do this in the convert stage, alternatively.
     #This shouldn't be necessary if the initial data has been balanced
+    #plt.pcolormesh(field.T, cmap = 'seismic', vmin = -np.max(np.abs(field)), vmax = np.max(np.abs(field)))
+    #plt.show()
+    # toplot = field
+    # plt.pcolormesh(toplot.T, cmap = 'seismic', vmin = -np.max(np.abs(toplot)), vmax = np.max(np.abs(toplot)))
+    # plt.show()
+
+    #Attempt to find a way to balance EACH column and row here.
+
     fieldplus = field[1:-1,1:-1] * [field[1:-1,1:-1] >= 0]
     fieldminus = field[1:-1,1:-1] * [field[1:-1,1:-1] < 0]
 
@@ -77,11 +85,16 @@ def balance_flux(field):
 
     fieldplus = fieldplus[0] * avg/np.sum(fieldplus)
     fieldminus = fieldminus[0] * -avg/np.sum(fieldminus)
+    field = np.array(fieldplus + fieldminus)
+
+    # toplot = field
+    # plt.pcolormesh(toplot.T, cmap = 'seismic', vmin = -np.max(np.abs(toplot)), vmax = np.max(np.abs(toplot)))
+    # plt.show()
 
     return np.array(fieldplus + fieldminus)
 
 #Want to import this as a function so just do it like that
-def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 10000, plot = False, normalise = False):
+def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 10000, plot = False, normalise = False, envelope_factor = -1, pad_factor = 0):
     #Imports the grid data, sharp id and the start and end frames to plot
     #Generally will be a mess at the start and end, so ignore those bits.
     print('Converting raw data from SHARP', sharp_id)
@@ -144,35 +157,33 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
         by_smooth = gaussian_filter(-bt, sigma = grid_downscale)
         bz_smooth = gaussian_filter(br, sigma = grid_downscale)
 
-        input_xs = np.linspace(-1,1,bp.shape[0])
-        input_ys = np.linspace(-1,1,bp.shape[1])
-        #Force smoothly to zero at the edges of the domain, to stop boundary mess appearing
-        X, Y = np.meshgrid(input_xs, input_ys, indexing = 'ij')
-        edge = 0.9; steep = 20.0
-        envelope = 0.5-0.5*np.tanh(np.maximum(steep*(X**2-edge), steep*(Y**2-edge)))
-
-        envelope[-1,:] = 0.0;envelope[0,:] = 0.0;envelope[:,0] = 0.0;envelope[:,-1] = 0.0
-
-        if True:
-            bx_smooth = bx_smooth*envelope
-            by_smooth = by_smooth*envelope
-            bz_smooth = bz_smooth*envelope
-
         #Interpolate onto the STAGGERED grid (just linearly)
+        #If padding, need to be more smart here
+
+        pad_distance = max(grid.x1, grid.y1)*pad_factor
+        #envelope_factor = 1.0/pad_factor
+
         xs_import = np.linspace(grid.x0, grid.x1, bx_smooth.shape[0])
         ys_import = np.linspace(grid.y0, grid.y1, by_smooth.shape[1])
 
+        xs_pad = np.linspace(grid.x0 - pad_distance, grid.x1 + pad_distance, bx_smooth.shape[0])
+        ys_pad = np.linspace(grid.y0 - pad_distance, grid.y1 + pad_distance, by_smooth.shape[1])
+
         X, Y = np.meshgrid(grid.xs, grid.yc, indexing = 'ij')
-        bx_fn = RegularGridInterpolator((xs_import, ys_import), bx_smooth, bounds_error = False, method = 'linear', fill_value = None)
-        bx_out = bx_fn((X,Y))   #Difference now interpolated to the new grid
+        bx_fn = RegularGridInterpolator((xs_import, ys_import), bx_smooth, bounds_error = False, method = 'linear', fill_value = 0.0)
+        bx_out = bx_fn((X*pad_factor,Y*pad_factor))   #Difference now interpolated to the new grid
 
         X, Y = np.meshgrid(grid.xc, grid.ys, indexing = 'ij')
-        by_fn = RegularGridInterpolator((xs_import, ys_import), by_smooth, bounds_error = False, method = 'linear', fill_value = None)
-        by_out = by_fn((X,Y))   #Difference now interpolated to the new grid
+        by_fn = RegularGridInterpolator((xs_import, ys_import), by_smooth, bounds_error = False, method = 'linear', fill_value = 0.0)
+        by_out = by_fn((X*pad_factor,Y*pad_factor))   #Difference now interpolated to the new grid
 
         X, Y = np.meshgrid(grid.xc, grid.yc, indexing = 'ij')
-        bz_fn = RegularGridInterpolator((xs_import, ys_import), bz_smooth, bounds_error = False, method = 'linear', fill_value = None)
-        bz_out = bz_fn((X,Y))   #Difference now interpolated to the new grid
+        bz_fn = RegularGridInterpolator((xs_import, ys_import), bz_smooth, bounds_error = False, method = 'linear', fill_value = 0.0)
+        bz_out = bz_fn((X*pad_factor,Y*pad_factor))   #Difference now interpolated to the new grid
+
+        toplot = bz_out.T
+        plt.pcolormesh(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
+        plt.show()
 
         if normalise:
             bz_out[1:-1,1:-1] = balance_flux(bz_out)

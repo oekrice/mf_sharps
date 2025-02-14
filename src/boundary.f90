@@ -28,29 +28,49 @@ SUBROUTINE magnetic_boundary()
 
     !PROBLEM WITH CORNERS!
 
-    !x boundaries (Zero current, and zero flux)
+
+    !LOWER BOUNDARY (Zero current)
+    if (z_rank == 0) then
+    surf_by(0:nx+1,0:ny) = mag_ratio*surf_by1(0:nx+1,0:ny) + (1.0_num - mag_ratio)*surf_by0(0:nx+1,0:ny)
+    surf_bx(0:nx, 0:ny+1) = mag_ratio*surf_bx1(0:nx, 0:ny+1) + (1.0_num - mag_ratio)*surf_bx0(0:nx, 0:ny+1)
+
+
+    by(0:nx+1,0:ny,0) = surf_by(0:nx+1,0:ny)
+    bx(0:nx,0:ny+1,0) = surf_bx(0:nx,0:ny+1)
+
+!     by(0:nx+1,0:ny,0) = by(0:nx+1,0:ny,1) - dz*(bz(0:nx+1,1:ny+1,0) - bz(0:nx+1, 0:ny,0))/dy
+!     bx(0:nx, 0:ny+1,0) = bx(0:nx,0:ny+1,1) - dz*(bz(1:nx+1,0:ny+1,0) - bz(0:nx,0:ny+1,0))/dx
+    end if
+
+    !UPPER BOUNDARY (Zero Current)
+    if (z_rank == z_procs-1) then
+    by(0:nx+1,0:ny,nz+1) = by(0:nx+1,0:ny,nz) + dz*(bz(0:nx+1,1:ny+1,nz) - bz(0:nx+1, 0:ny,nz))/dy
+    bx(0:nx, 0:ny+1,nz+1) = bx(0:nx,0:ny+1,nz) + dz*(bz(1:nx+1,0:ny+1,nz) - bz(0:nx,0:ny+1,nz))/dx
+    end if
+
+      !x boundaries (Zero current, and zero flux)
     if (x_rank == 0) then
       bx(-1,:,:) = bx(1,:,:)
-      by( 0,:,:) = 0.0_num!by(1,:,:)
+      by( 0,:,:) = -by(1,:,:)
       bz( 0,:,:) = bz(1,:,:)
     end if
 
     if (x_rank == x_procs-1) then
       bx(nx+1,:,:) = bx(nx-1,:,:)
-      by(nx+1,:,:) = 0.0_num!by(nx  ,:,:)
+      by(nx+1,:,:) = -by(nx  ,:,:)
       bz(nx+1,:,:) = bz(nx  ,:,:)
     end if
 
     !y boundaries (Zero current, and zero flux)
     if (y_rank == 0) then
-      bx(:, 0,:) = 0.0_num!bx(:,1,:)
+      bx(:, 0,:) = -bx(:,1,:)
       by(:,-1,:) = by(:,1,:)
       bz(:, 0,:) = bz(:,1,:)
     end if
 
     if (y_rank == y_procs-1) then
 
-      bx(:,ny+1,:) = 0.0_num!bx(:,ny  ,:)
+      bx(:,ny+1,:) = -bx(:,ny  ,:)
       by(:,ny+1,:) = by(:,ny-1,:)
       bz(:,ny+1,:) = bz(:,ny  ,:)
 
@@ -68,18 +88,6 @@ SUBROUTINE magnetic_boundary()
       bx(:,:,nz+1) = bx(:,:,nz  )
       by(:,:,nz+1) = by(:,:,nz  )
       bz(:,:,nz+1) = bz(:,:,nz-1)
-    end if
-
-    !LOWER BOUNDARY (Zero current)
-    if (z_rank == 0) then
-    by(0:nx+1,0:ny,0) = by(0:nx+1,0:ny,1)! - dz*(bz(0:nx+1,1:ny+1,0) - bz(0:nx+1, 0:ny,0))/dy
-    bx(0:nx, 0:ny+1,0) = bx(0:nx,0:ny+1,1)! - dz*(bz(1:nx+1,0:ny+1,0) - bz(0:nx,0:ny+1,0))/dx
-    end if
-
-    !UPPER BOUNDARY (Zero Current)
-    if (z_rank == z_procs-1) then
-    by(0:nx+1,0:ny,nz+1) = by(0:nx+1,0:ny,nz)! + dz*(bz(0:nx+1,1:ny+1,nz) - bz(0:nx+1, 0:ny,nz))/dy
-    bx(0:nx, 0:ny+1,nz+1) = bx(0:nx,0:ny+1,nz)! + dz*(bz(1:nx+1,0:ny+1,nz) - bz(0:nx,0:ny+1,nz))/dx
     end if
 
     !x boundaries (Zero current, and zero flux)
@@ -115,6 +123,7 @@ SUBROUTINE magnetic_boundary()
     bz(0:nx+1,0:ny+1,-1) = (1.0_num/(dx*dy))*(bz(0:nx+1,0:ny+1,0)*dx*dy - bx(-1:nx,0:ny+1,0)*dy*dz + &
     bx(0:nx+1,0:ny+1,0)*dy*dz - by(0:nx+1,-1:ny,0)*dx*dz + by(0:nx+1,0:ny+1,0)*dx*dz)
     end if
+
     !UPPER BOUNDARY
     if (z_rank == z_procs - 1) then
     bz(0:nx+1,0:ny+1,nz+1) = (1.0_num/(dx*dy))*(bz(0:nx+1,0:ny+1,nz)*dx*dy + bx(-1:nx,0:ny+1,nz+1)*dy*dz - &

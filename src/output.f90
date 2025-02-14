@@ -459,12 +459,20 @@ SUBROUTINE export_magnetogram(mag_num)
 
             call try(nf90_open(trim(mag_filename), nf90_write, ncid))
 
+!             call try(nf90_inq_varid(ncid, 'bx', vid))
+!             call try(nf90_put_var(ncid, vid, 0.5_num*(bx(0:nx,1:ny,0) + bx(0:nx,1:ny,1)), &
+!             start = (/x_rank*nx+1,y_rank*ny+1/),count = (/nx+1,ny/)))
+!
+!             call try(nf90_inq_varid(ncid, 'by', vid))
+!             call try(nf90_put_var(ncid, vid, 0.5_num*(by(1:nx,0:ny,0) + by(1:nx,0:ny,1)), &
+!             start = (/x_rank*nx+1,y_rank*ny+1/),count = (/nx,ny+1/)))
+
             call try(nf90_inq_varid(ncid, 'bx', vid))
-            call try(nf90_put_var(ncid, vid, 0.5_num*(bx(0:nx,1:ny,0) + bx(0:nx,1:ny,1)), &
+            call try(nf90_put_var(ncid, vid, 1.0_num*(bx(0:nx,1:ny,1)), &
             start = (/x_rank*nx+1,y_rank*ny+1/),count = (/nx+1,ny/)))
 
             call try(nf90_inq_varid(ncid, 'by', vid))
-            call try(nf90_put_var(ncid, vid, 0.5_num*(by(1:nx,0:ny,0) + by(1:nx,0:ny,1)), &
+            call try(nf90_put_var(ncid, vid, 1.0_num*(by(1:nx,0:ny,1)), &
             start = (/x_rank*nx+1,y_rank*ny+1/),count = (/nx,ny+1/)))
 
             call try(nf90_inq_varid(ncid, 'bz', vid))

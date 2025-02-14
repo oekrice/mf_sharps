@@ -188,6 +188,7 @@ class compute_initial_condition():
                 for j in range(0,self.ny):
                     self.ay[i,j,k] = self.ay[i,j,k-1] - self.dz*self.bx[i,j+1,k]
 
+
         #Add random fluctuations
         self.ax = self.ax + 0.0*np.random.random(size = np.shape(self.ax))
         self.ay = self.ay + 0.0*np.random.random(size = np.shape(self.ay))

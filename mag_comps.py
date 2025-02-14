@@ -54,7 +54,7 @@ class Grid():
 class compute_inplane_helicity():
     #Uses all three components of the magnetic field to give values for A.B at EACH of the input timesteps.
     #Requires the script from Chris' flt code
-    def __init__(self, run, snap = 0):
+    def __init__(self, run, snap = 0, envelope_factor = -1):
 
         if snap < 0:
             #Find latest snap
@@ -119,9 +119,26 @@ class compute_inplane_helicity():
                     by0 = 0.5*(by[:,1:] + by[:,:-1])
                     bz0 = bz[:,:]
 
-
-
                 #Trim the edges out as these can go a bit screwy and bugger up the results
+
+                if envelope_factor > 0:
+                    input_xs = np.linspace(-1,1,bx0.shape[0])
+                    input_ys = np.linspace(-1,1,bx0.shape[1])
+                    #Force smoothly to zero at the edges of the domain, to stop boundary mess appearing
+                    X, Y = np.meshgrid(input_xs, input_ys, indexing = 'ij')
+                    edge = envelope_factor; steep = 20.0
+                    nx = bx0.shape[0]
+
+                    envelope = np.zeros((bx0.shape))
+                    envelope[bx0.shape[0]//4:3*bx0.shape[0]//4, bx0.shape[1]//4:3*bx0.shape[1]//4] = 1.0
+
+                    #envelope = 0.5-0.5*np.tanh(np.maximum(steep*(X**2-edge**2), steep*(Y**2-edge**2)))
+
+                    #envelope[-1,:] = 0.0; envelope[0,:] = 0.0; envelope[:,0] = 0.0; envelope[:,-1] = 0.0
+
+                    bx0 = bx0*envelope
+                    by0 = by0*envelope
+                    bz0 = bz0*envelope
 
                 def norm2d(vec):
                     mag = np.linalg.norm(vec)
@@ -176,8 +193,8 @@ class compute_inplane_helicity():
 
                 hfield = np.sqrt(np.abs(ax0*bx0 + ay0*by0 + az0*bz0))
 
-                print(np.sum(hfield))
-                toplots = [bx.T, by.T, bz.T, hfield.T]
+                print('Hfield', np.sum(hfield))
+                toplots = [bx0.T, by0.T, bz0.T, hfield.T]
 
                 for plot in range(4):
                     if ri == 0:
@@ -197,39 +214,6 @@ class compute_inplane_helicity():
                 if ri > 0:
                     plt.tight_layout()
                     plt.show()
-
-                if False:
-                    string = ['Reference', 'MF'][ri]
-                    if run < 0:
-                        fig, axs = plt.subplots(2,4, figsize = (10,5))
-
-                    if run < 0:
-                        row = 0
-
-                    else:
-                        row = ri - 1
-
-                    ax = axs[ri, 0]
-                    im = ax.pcolormesh(bx.T, cmap = 'seismic', vmax = np.max(np.abs(bx)), vmin = -np.max(np.abs(bx)))
-                    plt.colorbar(im, ax = ax)
-                    ax.set_title('$B_x$, %s' % string)
-
-                    ax = axs[ri, 1]
-                    im =axs[ri,1].pcolormesh(by.T, cmap = 'seismic', vmax = np.max(np.abs(by)), vmin = -np.max(np.abs(by)))
-                    plt.colorbar(im, ax = ax)
-                    ax.set_title('$B_y$, %s' % string)
-
-                    ax = axs[ri, 2]
-                    im = axs[ri,2].pcolormesh(bz.T, cmap = 'seismic', vmax = np.max(np.abs(bz)), vmin = -np.max(np.abs(bz)))
-                    plt.colorbar(im, ax = ax)
-                    ax.set_title('$B_z$, %s' % string)
-
-                    ax = axs[ri, 3]
-                    im = axs[ri,3].pcolormesh(hfield.T, cmap = 'seismic', vmax = np.max(np.abs(hfield)), vmin = -np.max(np.abs(hfield)))
-                    plt.colorbar(im, ax = ax)
-                    ax.set_title('$(A.B)$, %s' % string)
-
-                hfield = np.sqrt(np.abs(hfield))
 
             plt.suptitle('t = %d' % (snap*0.5))
             plt.tight_layout()
@@ -262,6 +246,6 @@ if len(sys.argv) > 1:
 else:
     snap = -1
 
-compute_inplane_helicity(0, snap = snap)
+compute_inplane_helicity(0, snap = snap,envelope_factor = -1.0)
 
 
