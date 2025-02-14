@@ -34,7 +34,6 @@ SUBROUTINE magnetic_boundary()
     surf_by(0:nx+1,0:ny) = mag_ratio*surf_by1(0:nx+1,0:ny) + (1.0_num - mag_ratio)*surf_by0(0:nx+1,0:ny)
     surf_bx(0:nx, 0:ny+1) = mag_ratio*surf_bx1(0:nx, 0:ny+1) + (1.0_num - mag_ratio)*surf_bx0(0:nx, 0:ny+1)
 
-
     by(0:nx+1,0:ny,0) = surf_by(0:nx+1,0:ny)
     bx(0:nx,0:ny+1,0) = surf_bx(0:nx,0:ny+1)
 

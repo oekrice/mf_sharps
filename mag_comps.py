@@ -60,7 +60,7 @@ class compare_mags():
             #Find latest snap
             for snap_try in range(10000):
                 if not os.path.exists('./mf_mags/%03d/%04d.nc' % (run, snap_try)):
-                    snap = snap_try - 1
+                    snap = snap_try - 2
                     break
 
         sharp_id = 956

@@ -14,7 +14,7 @@ import time
 import matplotlib.pyplot as plt
 
 from init import compute_initial_condition
-from write_electric import compute_electrics, compute_electrics_bounded, read_boundary, compute_inplane_helicity
+from write_electric import compute_electrics_bounded, read_boundary, compute_inplane_helicity
 from scipy.io import netcdf_file
 from scipy.optimize import curve_fit
 from scipy.io import netcdf_file
@@ -59,10 +59,10 @@ envelope_factor = -1.0 #If positive, smoothly drops the input magnetogram to zer
 pad_factor = 0.25 #Adds a given padding distance to the x,y dimensions to allow the electric fields to match there. 0 Does nothing.
 
 normalise_inputs = True       #If True, will normalise all the magnetic fields such that the max radial component is 1. Also adresses flux balance.
-dothings = True
+dothings = False
 check_data = dothings
 recalculate_inputs = dothings   #Redo the interpolation from the SHARP inputs onto this grid
-recalculate_init = dothings       #Recalculates the initial potential field
+recalculate_init = False       #Recalculates the initial potential field
 recalculate_boundary = dothings  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
 
 nx = 128
@@ -416,10 +416,8 @@ for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_
     go  = True
     stopnext = False
 
-    hardmax = 0.1
+    hardmax = 0.25
     while go:
-        go = False
-        omega = 0.0
         #Find the ideal omega
         if stopnext:
             go = False
@@ -478,7 +476,7 @@ for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_
 
         xs.append(omega); ys.append(check - target)
 
-        if abs(check - target) < 1e0:   #Close enough
+        if abs(check - target) < 1e-1:   #Close enough
             go = False
             print('GOOD ENOUGH',  omega, check-target, xs, ys)
 
@@ -486,28 +484,25 @@ for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_
             print('NOT GOOD ENOUGH', omega, check-target, xs, ys)
             if len(xs) == 1:
                 if check > target and omega > minomega:
-                    omega = omega - omega_range/4
+                    omega = omega - omega_range/10
                 elif check < target and omega < maxomega:
-                    omega = omega + omega_range/4
+                    omega = omega + omega_range/10
                 else:
                     go = False
             else:
-                #Check for anomalies...
-                if (ys[-1] - ys[-2]) / (xs[-1] - xs[-2]) < 0:
-                    go = False
-                else:
-                    nr_target = xs[-1] - ys[-1]*((xs[-1] - xs[-2])/(ys[-1] - ys[-2]))
-                    if nr_target > maxomega:
-                        omega = np.mean(omegas[block_start-back:block_start])
-                        stopnext = True
-                        print('OMEGA BIG', nr_target)
-                    elif nr_target < minomega:
-                        omega = minomega
-                        omega = np.mean(omegas[block_start-back:block_start])
-                        stopnext = True
-                        print('OMEGA SMALL', nr_target)
+                back = min(5, len(omegas))  #Take averages if that goes terribly
+                nr_target = xs[-1] - ys[-1]*((xs[-1] - xs[-2])/(ys[-1] - ys[-2]))
+                if nr_target > maxomega:
+                    omega = np.mean(omegas[block_start-back:block_start])
+                    stopnext = True
+                    print('OMEGA BIG', nr_target)
+                elif nr_target < minomega:
+                    omega = minomega
+                    omega = np.mean(omegas[block_start-back:block_start])
+                    stopnext = True
+                    print('OMEGA SMALL', nr_target)
 
-                    else:
-                        print('TARGET',nr_target)
-                        omega = nr_target
+                else:
+                    print('TARGET',nr_target)
+                    omega = nr_target
 

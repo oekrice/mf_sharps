@@ -217,6 +217,7 @@ class Grid():
     
     def grad(self, phi):
         """Returns gradients of phi (at grid points)"""
+        phi = phi[1:-1,1:-1]
         grad_x = np.zeros((self.nx+2, self.ny+1))
         grad_y = np.zeros((self.nx+1, self.ny+2))
         grad_x[1:-1,:] = (phi[1:,:] - phi[:-1,:])/self.dx
@@ -290,7 +291,7 @@ def balance_flux(field):
 
     return np.array(fieldplus + fieldminus)
 
-def find_eigenthings(grid):
+def find_eigenthings_centres(grid):
     #Finds the eigenvectors and values for the grid, using the outflow field method
     #x first
     d = -2*np.ones(grid.nx)
@@ -313,6 +314,31 @@ def find_eigenthings(grid):
     v_y = v_y[:,::-1]
 
     return w_x, v_x, w_y, v_y
+
+def find_eigenthings_points(grid):
+    #Finds the eigenvectors and values for the grid, using the outflow field method
+    #x first
+    d = -2*np.ones(grid.nx+1)
+    e = np.ones(grid.nx)
+    #BCs
+    e[0] = 0
+    e[-1] = 0
+    m_x, c_x = eigh_tridiagonal(d,e)
+    m_x = m_x[::-1]
+    c_x = c_x[:,::-1]
+
+    #Then y
+    d = -2*np.ones(grid.ny+1)
+    e = np.ones(grid.ny)
+    #BCs
+    e[0] = 0
+    e[-1] = 0
+    m_y, c_y = eigh_tridiagonal(d,e)
+    m_y = m_y[::-1]
+    c_y = c_y[:,::-1]
+
+    return m_x, c_x, m_y, c_y
+
 
 def transform(rhs, basis, n_x, n_y):
     #Assuming the test vectors are orthogonal, finds the component which matches the rhs
@@ -347,7 +373,10 @@ class compute_electrics_bounded():
             tplots = np.load('./hdata/tplots%03d.npy' % run).tolist()
 
         #Calculate eigenthings (only once)
-        w_x, v_x, w_y, v_y = find_eigenthings(grid)
+        w_x, v_x, w_y, v_y = find_eigenthings_centres(grid)  #For G
+
+        m_x, c_x, m_y, c_y = find_eigenthings_points(grid)  #For G
+
         print('Eigenthings found')
 
         for snap in range(start, end):
@@ -432,54 +461,50 @@ class compute_electrics_bounded():
                 plt.tight_layout()
                 plt.show()
 
-            def add_crude_grad(ex, ey):
-                #Using existing ex and ey, add on a very crude gradient term to minimise the errors
-                ex_means = 0.5*(np.mean(ex[:,0]) + np.mean(ex[:,-1]))
-                ey_means = 0.5*(np.mean(ey[0,:]) + np.mean(ey[-1,:]))
-                return ex - ex_means, ey - ey_means
             #Define distribution of the divergence of the electric field.
             #Following Cheung and De Rosa, just proportional to the vertical (averaged to points) magnetic field
 
-            # bf = 0.5 * (bfield1 + bfield2)
-            #
-            # bf = 0.25*(bf[1:,1:] + bf[:-1,1:] + bf[:-1,:-1] + bf[1:,:-1])
-            # D = omega*(bf)
-            #
-            # div_test = grid.div_E(ex, ey)
+            bf = 0.5 * (bfield1 + bfield2)
 
-            F = np.zeros((grid.nx+2, grid.ny+2))
+            bf = 0.25*(bf[1:,1:] + bf[:-1,1:] + bf[:-1,:-1] + bf[1:,:-1])
+            D = omega*(bf)
+
+            div_test = grid.div_E(ex, ey)
+
+            div_diff = D - div_test
+            F = np.zeros((grid.nx+3, grid.ny+3))
             #comp = np.zeros((grid.nx+2, grid.ny+2))
 
-            # for n_x in range(0,len(w_x)):
-            #     for n_y in range(0,len(w_y)):
-            #         if abs(w_x[n_x] + w_y[n_y]) > 1e-10:
-            #             basis = v_x[:,n_x][:,np.newaxis]*v_y[:,n_y][np.newaxis,:]
-            #             F[1:-1,1:-1] = F[1:-1,1:-1] + (1.0/(w_x[n_x]/grid.dx**2 + w_y[n_y]/grid.dy**2))*basis*transform(-diff[1:-1,1:-1], basis, n_x, n_y)
-            #             #comp[1:-1,1:-1] = comp[1:-1,1:-1] + (1.0)*basis*transform(-diff[1:-1,1:-1], basis, n_x, n_y)
+            for n_x in range(0,len(m_x)):
+                for n_y in range(0,len(m_y)):
+                    if abs(m_x[n_x] + m_y[n_y]) > 1e-10:
+                        basis = c_x[:,n_x][:,np.newaxis]*c_y[:,n_y][np.newaxis,:]
+                        F[1:-1,1:-1] = F[1:-1,1:-1] + (1.0/(m_x[n_x]/grid.dx**2 + m_y[n_y]/grid.dy**2))*basis*transform(-div_diff, basis, n_x, n_y)
 
-            F[0,:] = F[1,:]; F[-1,:] = F[-2,:]
-            F[:,0] = F[:,1]; F[:,-1] = F[:,-2]
+            F[0,:] = -F[2,:]; F[-1,:] = -F[-3,:]
+            F[:,0] = -F[:,2]; F[:,-1] = -F[:,-3]
             # phi = ft.point_transform(-div_test + D)
-            # correct_x, correct_y = grid.grad(phi)
-            # ex += correct_x
-            # ey += correct_y
+
+            correct_x, correct_y = grid.grad(F)
+            ex -= correct_x
+            ey -= correct_y
             #
             # div_test = grid.div_E(ex, ey)
+            div_test = grid.div_E(ex, ey)
 
 
-            #if np.max(np.abs(curl_test[1:-1,1:-1] + diff[1:-1,1:-1])) > 1e-10:
-            #    raise Exception('Electric field calculation failed')
-            #if np.max(np.abs(div_test[1:-1,1:-1] - D[1:-1,1:-1])) > 1e-10:
-            #    raise Exception('Electric field calculation failed')
+            if np.max(np.abs(curl_test[1:-1,1:-1] + diff[1:-1,1:-1])) > 1e-10:
+                raise Exception('Electric field calculation failed')
+            if np.max(np.abs(div_test[1:-1,1:-1] - D[1:-1,1:-1])) > 1e-10:
+                raise Exception('Electric field calculation failed')
+
 
             # print(bfield_fname)
-            # print('Curl test', np.max(np.abs(curl_test[1:-1,1:-1] + diff[1:-1,1:-1])))
-            # print('Div Test', np.max(np.abs(div_test[1:-1,1:-1] - D[1:-1,1:-1])))
+            print('Curl test', np.max(np.abs(curl_test[1:-1,1:-1] + diff[1:-1,1:-1])))
+            print('Div Test', np.max(np.abs(div_test[1:-1,1:-1] - D[1:-1,1:-1])))
             # print('____________________________________________')
 
             curl_test = grid.curl_E(ex, ey)
-
-            #ex, ey = add_crude_grad(ex, ey)
 
             #print('dx', grid.dx, 'dy', grid.dy)
 
@@ -605,206 +630,4 @@ class compute_electrics_bounded():
             self.tplots = tplots
             self.omegas = omegas
 
-class compute_electrics():
-    
-    def __init__(self, run, init_number, mag_root, mag_times, omega = 0., start = 0, end = 500, initialise = True, plot = False):
-
-        grid = Grid(run)  #Establish grid (on new scales)
-        
-
-        omega_init = omega
-        data_directory = mag_root
-        
-        paras = np.loadtxt('parameters/variables%03d.txt' % run)
-        
-        if not os.path.exists('efields'):
-            os.mkdir('efields')
-
-        if not os.path.exists('efields/%03d' % init_number):
-            os.mkdir('efields/%03d' % init_number)
-
-        if initialise:   #Need to establish reference helicities from the magnetograms.
-            hrefs = []; trefs = []
-        elif start == 0:
-            halls = []; tplots = []; omegas = []
-        else:
-            halls = np.load('./hdata/halls%03d.npy' % run).tolist()
-            omegas = np.load('./hdata/omegas%03d.npy' % run).tolist()
-            tplots = np.load('./hdata/tplots%03d.npy' % run).tolist()
-
-        for snap in range(start, end):
-
-            bfield_fname = '%s%04d.nc' % (data_directory, snap)
-            efield_fname = '%s%03d/%04d.nc' % ('./efields/', init_number, snap)
-        
-            try:
-                data = netcdf_file(bfield_fname, 'r', mmap=False)
-                #print('File', bfield_fname, 'found')
-        
-            except:
-                print('File', bfield_fname, 'not found')
-                raise Exception('Input Magnetogram Not Found')
-
-                continue
-        
-            bfield1 = np.swapaxes(data.variables['bz'][:], 0, 1)
-            bfield1 = balance_flux(bfield1)
-
-            bfield_fname = '%s%04d.nc' % (data_directory, snap + 1)
-        
-            try:
-                data = netcdf_file(bfield_fname, 'r', mmap=False)
-        
-            except:
-                print('File', bfield_fname, 'not found')
-                raise Exception('Input Magnetogram Not Found')
-                continue
-        
-            bfield2 = np.swapaxes(data.variables['bz'][:], 0, 1)
-
-            bfield2 = balance_flux(bfield2)
-
-            if True:
-                diff = bfield2 - bfield1   #Difference between the magnetic field at import resolution
-            else:
-                diff = 0.0*bfield1  #Keep lower boundary constant, for stability testing
-
-            ft = FT(grid)
-            G = ft.centre_transform(-diff)
-            ex, ey = grid.curl_inplane(G)
-            curl_test = grid.curl_E(ex, ey)
-        
-            if plot:
-                fig, axs = plt.subplots(3)
-
-                im = axs[0].pcolormesh(curl_test[1:-1,1:-1] )
-                plt.colorbar(im, ax = axs[0])
-                im = axs[1].pcolormesh(-diff[1:-1,1:-1] )
-                plt.colorbar(im, ax = axs[1])
-                im = axs[2].pcolormesh(curl_test[1:-1,1:-1] + diff[1:-1,1:-1] )
-                plt.colorbar(im, ax = axs[2])
-
-                plt.tight_layout()
-                plt.show()
-            #Define distribution of the divergence of the electric field. 
-            #Following Cheung and De Rosa, just proportional to the vertical (averaged to points) magnetic field
-
-            bf = 0.5 * (bfield1 + bfield2)
-
-            bf = 0.25*(bf[1:,1:] + bf[:-1,1:] + bf[:-1,:-1] + bf[1:,:-1])
-            D = omega*(bf)
-
-            div_test = grid.div_E(ex, ey)
-            phi = ft.point_transform(-div_test + D)
-            correct_x, correct_y = grid.grad(phi)
-            ex += correct_x
-            ey += correct_y
-        
-            div_test = grid.div_E(ex, ey)
-
-            if plot:
-
-                if np.max(np.abs(curl_test[1:-1,1:-1] + diff[1:-1,1:-1])) > 1e-10:
-                    raise Exception('Electric field calculation failed')
-                if np.max(np.abs(div_test[1:-1,1:-1] - D[1:-1,1:-1])) > 1e-10:
-                    raise Exception('Electric field calculation failed')
-
-                print(bfield_fname)
-                print('Curl test', np.max(np.abs(curl_test[1:-1,1:-1] + diff[1:-1,1:-1])))
-                print('Div Test', np.max(np.abs(div_test[1:-1,1:-1] - D[1:-1,1:-1])))
-                print('____________________________________________')
-
-            curl_test = grid.curl_E(ex, ey)
-
-            #print('dx', grid.dx, 'dy', grid.dy)
-            #Swap sign of E, as that seems to be the way forward.
-            ex = -ex
-            ey = -ey
-
-            if True:   #Constrain to envelope (removes exact solution, unfortunately)
-
-                input_xs = np.linspace(-1,1,ex.shape[0])
-                input_ys = np.linspace(-1,1,ex.shape[1])
-
-                X, Y = np.meshgrid(input_xs, input_ys, indexing = 'ij')
-                edge = envelope_factor; steep = 20.0
-                envelope = 0.5-0.5*np.tanh(np.maximum(steep*(X**2-edge**2), steep*(Y**2-edge**2)))
-
-                envelope[-1,:] = 0.0;envelope[0,:] = 0.0;envelope[:,0] = 0.0;envelope[:,-1] = 0.0
-
-                ex = ex*envelope
-
-                input_xs = np.linspace(-1,1,ey.shape[0])
-                input_ys = np.linspace(-1,1,ey.shape[1])
-
-                X, Y = np.meshgrid(input_xs, input_ys, indexing = 'ij')
-                edge = envelope_factor; steep = 20.0
-                envelope = 0.5-0.5*np.tanh(np.maximum(steep*(X**2-edge**2), steep*(Y**2-edge**2)))
-
-                envelope[-1,:] = 0.0;envelope[0,:] = 0.0;envelope[:,0] = 0.0;envelope[:,-1] = 0.0
-
-                ey = ey*envelope
-
-            if True:
-                plt.pcolormesh(ey, cmap = 'seismic', vmin = -np.max(np.abs(ey)), vmax = np.max(np.abs(ey)))
-                plt.savefig('plots/ey%d.png' % snap)
-                plt.close()
-                
-                plt.pcolormesh(ex, cmap = 'seismic', vmin = -np.max(np.abs(ex)), vmax = np.max(np.abs(ex)))
-                plt.savefig('plots/ex%d.png' % snap)
-                plt.show()
-
-            fid = netcdf_file(efield_fname, 'w')
-            fid.createDimension('xs', grid.nx+1)
-            fid.createDimension('ys', grid.ny+1)
-            fid.createDimension('xc', grid.nx+2)
-            fid.createDimension('yc', grid.ny+2)
-        
-            vid = fid.createVariable('xs', 'd', ('xs',))
-            vid[:] = grid.xs
-            vid = fid.createVariable('ys', 'd', ('ys',))
-            vid[:] = grid.ys
-        
-            vid = fid.createVariable('xc', 'd', ('xc',))
-            vid[:] = grid.xc
-            vid = fid.createVariable('yc', 'd', ('yc',))
-            vid[:] = grid.yc
-        
-            #Transposes are necessary as it's easier to flip here than in Fortran
-            #Still doesn't seem to like it -- sums are all correct but going in with the wrong direction.
-            vid = fid.createVariable('ex', 'd', ('ys','xc'))
-            vid[:] = np.swapaxes(ex, 0, 1)
-            vid = fid.createVariable('ey', 'd', ('yc','xs'))
-            vid[:] = np.swapaxes(ey, 0, 1)
-        
-            fid.close()
-
-            if initialise:  #Calculate reference helicities
-                bfield_fname = '%s%04d.nc' % (data_directory, snap)
-                data = netcdf_file(bfield_fname, 'r', mmap=False)
-                bx = np.swapaxes(data.variables['bx'][:], 0, 1)
-                by = np.swapaxes(data.variables['by'][:], 0, 1)
-                bz = np.swapaxes(data.variables['bz'][:], 0, 1)
-                href = compute_inplane_helicity(grid, bx, by, bz, envelope_factor = envelope_factor)
-                hrefs.append(np.sum(href))
-                trefs.append(mag_times[snap])
-
-        if initialise:  #Calculate final one
-            bfield_fname = '%s%04d.nc' % (data_directory, snap + 1)
-            data = netcdf_file(bfield_fname, 'r', mmap=False)
-            bx = np.swapaxes(data.variables['bx'][:], 0, 1)
-            by = np.swapaxes(data.variables['by'][:], 0, 1)
-            bz = np.swapaxes(data.variables['bz'][:], 0, 1)
-            href = compute_inplane_helicity(grid, bx, by, bz, envelope_factor = envelope_factor)
-            hrefs.append(np.sum(href))
-            trefs.append(mag_times[snap+1])
-
-        print('Electric fields', start, ' to ', end, ' calculated and saved.')
-        if initialise:
-            np.save('./hdata/h_ref.npy', np.array(hrefs))
-            np.save('./hdata/t_ref.npy', np.array(trefs))
-        else:
-            self.halls = halls
-            self.tplots = tplots
-            self.omegas = omegas
 
