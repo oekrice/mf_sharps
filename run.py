@@ -51,7 +51,7 @@ except:
 sharp_id = 956 #1449
 
 sharps_directory = '/extra/tmp/trcn27/sharps/'
-max_mags = 250 #Maximum number of input magnetograms (won't convert all the import data)
+max_mags = 1000 #Maximum number of input magnetograms (won't convert all the import data)
 time_per_snap = 0.05  #Time units per input minute
 
 mag_start = 0   #First magnetogram to start from
@@ -65,7 +65,7 @@ recalculate_inputs = dothings   #Redo the interpolation from the SHARP inputs on
 recalculate_init = dothings       #Recalculates the initial potential field
 recalculate_boundary = True  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
 
-nx = 128
+nx = 196
 
 #DYNAMIC SYSTEM PARAMETERS
 #-------------------------------------
@@ -252,11 +252,11 @@ if os.path.exists(sharps_directory + '%05d_mag/' % sharp_id):
         print('Importing existing converted magnetic field...')
     else:
         print('Converting raw SHARPS onto this grid')
-        convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = True, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
+        convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
 
 else:
     print('Converting raw SHARPS onto this grid')
-    convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = True, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
+    convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
 
 nmags = len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id))
 
@@ -403,7 +403,7 @@ if hflag < 0.5:
 
 hrefs = np.load('./hdata/h_ref.npy').tolist()
 
-nmags_per_run = 1   #How many magnetic field INTERVALS to run for a given magnetofrictional chunk, with constant omega in each case
+nmags_per_run = 5   #How many magnetic field INTERVALS to run for a given magnetofrictional chunk, with constant omega in each case
 
 for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_run):
 
@@ -463,13 +463,6 @@ for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_
 
         target = hrefs[block_end]
 
-        halls[block_end] = check
-        omegas[block_start] = omega
-        tplots[block_end] = mag_times[block_end]
-
-        np.save('./hdata/halls%03d.npy' % run, halls)
-        np.save('./hdata/omegas%03d.npy' % run, omegas)
-        np.save('./hdata/tplots%03d.npy' % run, tplots)
 
         print('Check, target', check, target)
         #THIS ASSUMES A ZERO INTERCEPT RATHER THAN MINIMISING ANYTHING
@@ -479,6 +472,28 @@ for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_
         if abs(check - target) < 1e-1:   #Close enough
             go = False
             print('GOOD ENOUGH',  omega, check-target, xs, ys)
+            #Update helicities
+            halls[block_end] = check
+            omegas[block_start] = omega
+            tplots[block_end] = mag_times[block_end]
+
+            for snap in range(block_start, block_end):
+                #Update helicity tracking
+                fname = './mf_mags/%03d/%04d.nc' % (run, snap)
+
+                bx, by, bz = read_boundary(fname)
+                hfield = compute_inplane_helicity(grid, bx, by, bz)
+                hsum = np.sum(hfield[pad_cells:-pad_cells,pad_cells:-pad_cells])
+                check = np.sqrt(np.abs(hsum))*np.sign(hsum)
+
+                halls[snap] = check
+                omegas[snap] = omega
+                tplots[snap] = mag_times[snap]
+
+
+            np.save('./hdata/halls%03d.npy' % run, halls)
+            np.save('./hdata/omegas%03d.npy' % run, omegas)
+            np.save('./hdata/tplots%03d.npy' % run, tplots)
 
         else:   #not close enough, make a better estimate
             print('NOT GOOD ENOUGH', omega, check-target, xs, ys)
