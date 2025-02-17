@@ -321,12 +321,12 @@ SUBROUTINE set_outflow()
         hfact = (zs(k) - z0_global)/(z1_global - z0_global)   !Distance up the domain.
         do i = 0, nx+1
             do j = -1, ny+1
-                voutx(i,j,k) = voutfact*hfact**4
+                voutx(i,j,k) = voutfact*hfact**2
             end do
         end do
         do i = -1, nx+1
             do j = 0, ny+1
-                vouty(i,j,k) = voutfact*hfact**4
+                vouty(i,j,k) = voutfact*hfact**2
             end do
         end do
     end do

@@ -24,10 +24,7 @@ for ri in range(3):
         h_all = np.load(root1 + 'halls%03d.npy' % ri)
         omegas = np.load(root1 + 'omegas%03d.npy' % ri)
         tplots = np.load(root1 + 'tplots%03d.npy' % ri)
-        end = np.sum(np.abs(h_all) > 0)
-
-        print(h_all, tplots)
-
+        end = np.sum(np.abs(h_all) > 0) - 1
         axs[0].plot(tplots[:end], h_all[:end], c = cs[ri])
         axs[1].plot(tplots[:end], omegas[:end], c = cs[ri])
     except:

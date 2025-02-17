@@ -26,9 +26,6 @@ SUBROUTINE magnetic_boundary()
     !Boundary conditions on the magnetic field.
     !Uses the no-horizontal-current condition for the first ghost cells and then the solenoidal condition for the next lot.
 
-    !PROBLEM WITH CORNERS!
-
-
     !LOWER BOUNDARY (Zero current)
     if (z_rank == 0) then
     surf_by(0:nx+1,0:ny) = mag_ratio*surf_by1(0:nx+1,0:ny) + (1.0_num - mag_ratio)*surf_by0(0:nx+1,0:ny)
@@ -92,23 +89,23 @@ SUBROUTINE magnetic_boundary()
     !x boundaries (Zero current, and zero flux)
     if (x_rank == 0) then
     bz(0,0:ny+1,0:nz) = bz(1,0:ny+1,0:nz) - dx*(bx(0,0:ny+1,1:nz+1) - bx(0, 0:ny+1,0:nz))/dz
-    !by(0,0:ny,0:nz+1) = by(1, 0:ny,0:nz+1) - dx*(bx(0,1:ny+1,0:nz+1) - bx(0,0:ny,0:nz+1))/dy
+    by(0,0:ny,0:nz+1) = by(1, 0:ny,0:nz+1) - dx*(bx(0,1:ny+1,0:nz+1) - bx(0,0:ny,0:nz+1))/dy
     end if
 
     if (x_rank == x_procs-1) then
     bz(nx+1,0:ny+1,0:nz) = bz(nx,0:ny+1,0:nz) + dx*(bx(nx,0:ny+1,1:nz+1) - bx(nx, 0:ny+1,0:nz))/dz
-    !by(nx+1,0:ny,0:nz+1) = by(nx, 0:ny,0:nz+1) + dx*(bx(nx,1:ny+1,0:nz+1) - bx(nx,0:ny,0:nz+1))/dy
+    by(nx+1,0:ny,0:nz+1) = by(nx, 0:ny,0:nz+1) + dx*(bx(nx,1:ny+1,0:nz+1) - bx(nx,0:ny,0:nz+1))/dy
     end if
 
     !y boundaries (Zero current, and zero flux)
     if (y_rank == 0) then
     bz(0:nx+1,0,0:nz) = bz(0:nx+1, 1,0:nz) - dy*(by(0:nx+1,0,1:nz+1) - by(0:nx+1,0,0:nz))/dz
-    !bx(0:nx,0,0:nz+1) = bx(0:nx,1,0:nz+1) - dy*(by(1:nx+1,0,0:nz+1) - by(0:nx, 0,0:nz+1))/dx
+    bx(0:nx,0,0:nz+1) = bx(0:nx,1,0:nz+1) - dy*(by(1:nx+1,0,0:nz+1) - by(0:nx, 0,0:nz+1))/dx
     end if
 
     if (y_rank == y_procs-1) then
     bz(0:nx+1,ny+1,0:nz) = bz(0:nx+1, ny,0:nz) + dy*(by(0:nx+1,ny,1:nz+1) - by(0:nx+1,ny,0:nz))/dz
-    !bx(0:nx,ny+1,0:nz+1) = bx(0:nx,ny,0:nz+1) + dy*(by(1:nx+1,ny,0:nz+1) - by(0:nx, ny,0:nz+1))/dx
+    bx(0:nx,ny+1,0:nz+1) = bx(0:nx,ny,0:nz+1) + dy*(by(1:nx+1,ny,0:nz+1) - by(0:nx, ny,0:nz+1))/dx
     end if
 
     CALL MPI_BARRIER(comm,ierr)

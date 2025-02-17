@@ -51,19 +51,19 @@ except:
 sharp_id = 956 #1449
 
 sharps_directory = '/extra/tmp/trcn27/sharps/'
-max_mags = 100 #Maximum number of input magnetograms (won't convert all the import data)
+max_mags = 250 #Maximum number of input magnetograms (won't convert all the import data)
 time_per_snap = 0.05  #Time units per input minute
 
 mag_start = 0   #First magnetogram to start from
 envelope_factor = -1.0 #If positive, smoothly drops the input magnetogram to zero near the boundaries, at distance from 0 to 1 near the edge. Also adds some padding cells maybe.
-pad_factor = 0.25 #Adds a given padding distance to the x,y dimensions to allow the electric fields to match there. 0 Does nothing.
+padding_factor = 0.25 #Adds a given padding distance to the x,y dimensions to allow the electric fields to match there. 0 Does nothing.
 
 normalise_inputs = True       #If True, will normalise all the magnetic fields such that the max radial component is 1. Also adresses flux balance.
-dothings = False
+dothings = True
 check_data = dothings
 recalculate_inputs = dothings   #Redo the interpolation from the SHARP inputs onto this grid
-recalculate_init = False       #Recalculates the initial potential field
-recalculate_boundary = dothings  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
+recalculate_init = dothings       #Recalculates the initial potential field
+recalculate_boundary = True  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
 
 nx = 128
 
@@ -230,11 +230,11 @@ print('Using raw data from ', start, ' to ', end)
 aspect_init = import_ny/import_nx
 #Account for padding around the initial magnetogram. Assuming nx is longer. Which it might not be.
 if aspect_init < 1.0:
-    new_aspect = (aspect_init + pad_factor)/(1.0 + pad_factor)
+    new_aspect = (aspect_init + padding_factor)/(1.0 + padding_factor)
 else:
-    new_aspect = (1.0 + pad_factor)/(aspect_init + pad_factor)
+    new_aspect = (1.0 + padding_factor)/(aspect_init + padding_factor)
 
-print('Zero padding factor', pad_factor, 'aspects', aspect_init, new_aspect)
+print('Zero padding factor', padding_factor, 'aspects', aspect_init, new_aspect)
 ny = int(nx*new_aspect)
 ny = 4*(ny//4)
 nz = min(nx, ny)
@@ -252,11 +252,11 @@ if os.path.exists(sharps_directory + '%05d_mag/' % sharp_id):
         print('Importing existing converted magnetic field...')
     else:
         print('Converting raw SHARPS onto this grid')
-        convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, pad_factor = pad_factor)
+        convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = True, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
 
 else:
     print('Converting raw SHARPS onto this grid')
-    convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, pad_factor = pad_factor)
+    convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = True, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
 
 nmags = len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id))
 
@@ -416,7 +416,7 @@ for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_
     go  = True
     stopnext = False
 
-    hardmax = 0.25
+    hardmax = 0.1
     while go:
         #Find the ideal omega
         if stopnext:

@@ -94,7 +94,7 @@ def balance_flux(field):
     return np.array(fieldplus + fieldminus)
 
 #Want to import this as a function so just do it like that
-def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 10000, plot = False, normalise = False, envelope_factor = -1, pad_factor = 0):
+def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 10000, plot = False, normalise = False, envelope_factor = -1, padding_factor = 0):
     #Imports the grid data, sharp id and the start and end frames to plot
     #Generally will be a mess at the start and end, so ignore those bits.
     print('Converting raw data from SHARP', sharp_id)
@@ -153,15 +153,15 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
             raise Exception('Interpolating to a very fine grid. Consider not doing that...')
 
         #NOT SURE WHETHER TO FLIP SIGNS HERE. I THINK IT'S JUST y/theta
-        bx_smooth = gaussian_filter(bp, sigma = grid_downscale)
-        by_smooth = gaussian_filter(-bt, sigma = grid_downscale)
-        bz_smooth = gaussian_filter(br, sigma = grid_downscale)
+        bx_smooth = gaussian_filter(bp, sigma = grid_downscale*0.5)
+        by_smooth = gaussian_filter(-bt, sigma = grid_downscale*0.5)
+        bz_smooth = gaussian_filter(br, sigma = grid_downscale*0.5)
 
         #Interpolate onto the STAGGERED grid (just linearly)
         #If padding, need to be more smart here
 
-        pad_distance =  max(grid.x1, grid.y1) - max(grid.x1, grid.y1)/(1.0 + pad_factor)
-        #envelope_factor = 1.0/pad_factor
+        pad_distance =  max(grid.x1, grid.y1) - max(grid.x1, grid.y1)/(1.0 + padding_factor)
+        #envelope_factor = 1.0/padding_factor
 
         xs_import = np.linspace(grid.x0+pad_distance, grid.x1-pad_distance, bx_smooth.shape[0])
         ys_import = np.linspace(grid.y0+pad_distance, grid.y1-pad_distance, by_smooth.shape[1])
@@ -177,6 +177,11 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
         X, Y = np.meshgrid(grid.xc, grid.yc, indexing = 'ij')
         bz_fn = RegularGridInterpolator((xs_import, ys_import), bz_smooth, bounds_error = False, method = 'linear', fill_value = 0.0)
         bz_out = bz_fn((X,Y))   #Difference now interpolated to the new grid
+
+        bx_out = gaussian_filter(bx_out, sigma = 0.5)
+        by_out = gaussian_filter(by_out, sigma = 0.5)
+        bz_out = gaussian_filter(bz_out, sigma = 0.5)
+
 
         # toplot = bz_out.T
         # plt.imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
@@ -215,7 +220,7 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
             toplot = bz_out.T
             axs[2,2].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
 
-            plt.savefig('./plots/%05d' % output_count)
+            plt.savefig('./import_plots/%05d' % output_count)
             plt.close()
 
         #Save out to new filename

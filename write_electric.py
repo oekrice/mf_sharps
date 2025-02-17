@@ -446,7 +446,6 @@ class compute_electrics_bounded():
             ex, ey = grid.curl_inplane(G)
             curl_test = grid.curl_E(ex, ey)
 
-            print('Curl test', np.max(np.abs(curl_test + diff)))
 
             if False:
                 fig, axs = plt.subplots(3)
@@ -475,6 +474,7 @@ class compute_electrics_bounded():
             F = np.zeros((grid.nx+3, grid.ny+3))
             #comp = np.zeros((grid.nx+2, grid.ny+2))
 
+
             for n_x in range(0,len(m_x)):
                 for n_y in range(0,len(m_y)):
                     if abs(m_x[n_x] + m_y[n_y]) > 1e-10:
@@ -492,7 +492,6 @@ class compute_electrics_bounded():
             # div_test = grid.div_E(ex, ey)
             div_test = grid.div_E(ex, ey)
 
-
             if np.max(np.abs(curl_test[1:-1,1:-1] + diff[1:-1,1:-1])) > 1e-10:
                 raise Exception('Electric field calculation failed')
             if np.max(np.abs(div_test[1:-1,1:-1] - D[1:-1,1:-1])) > 1e-10:
@@ -500,8 +499,8 @@ class compute_electrics_bounded():
 
 
             # print(bfield_fname)
-            print('Curl test', np.max(np.abs(curl_test[1:-1,1:-1] + diff[1:-1,1:-1])))
-            print('Div Test', np.max(np.abs(div_test[1:-1,1:-1] - D[1:-1,1:-1])))
+            #print('Curl test', np.max(np.abs(curl_test[1:-1,1:-1] + diff[1:-1,1:-1])))
+            #print('Div Test', np.max(np.abs(div_test[1:-1,1:-1] - D[1:-1,1:-1])))
             # print('____________________________________________')
 
             curl_test = grid.curl_E(ex, ey)
