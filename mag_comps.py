@@ -63,6 +63,7 @@ class compare_mags():
                     snap = snap_try - 2
                     break
 
+        print('Snap number', snap)
         sharp_id = 956
         grid = Grid(0)
         h_ref = []
@@ -72,11 +73,15 @@ class compare_mags():
         omegas = []
 
         scales = np.zeros((4,2))
-
+        roots = ['Reference', 'MF']
         for snap_num in range(snap, snap+1):
-            fig, axs = plt.subplots(4, 2)
+            fig, axs = plt.subplots(2,4, figsize = (12,4))
 
             for ri, run in enumerate(runs):
+
+                if run >= 0:
+                    mag_times = np.loadtxt('./parameters/magtimes%03d.txt' % run)
+
                 if run >= 0:
                     paras = np.loadtxt('parameters/variables%03d.txt' % run)
                     omega = paras[28]
@@ -202,7 +207,7 @@ class compare_mags():
                 hsum = np.sum(hfield[pad_cells:-pad_cells,pad_cells:-pad_cells])
                 print('Hfield', np.sqrt(np.abs(hsum))*np.sign(hsum))
                 toplots = [bx0.T, by0.T, bz0.T, hfield.T]
-
+                titles = ['$B_x$', '$B_y$', '$B_z$', '$H$']
                 for plot in range(4):
                     if ri == 0:
                         vmin = -np.max(np.abs(toplots[plot]))
@@ -213,14 +218,22 @@ class compare_mags():
                     else:
                         vmin = scales[plot,0]
                         vmax = scales[plot,1]
-                    ax = axs[plot,ri]
+                    ax = axs[ri, plot]
                     im = ax.pcolormesh(toplots[plot], cmap = 'seismic', vmin = vmin, vmax = vmax)
 
-                    plt.colorbar(im, ax = ax)
-
+                    #plt.colorbar(im, ax = ax)
+                    ax.set_title(roots[ri] + ' ' + titles[plot])
+                    ax.set_aspect('equal')
+                    ax.set_xticks([])
+                    ax.set_yticks([])
+                    ax.axis('scaled')
                 if ri > 0:
+
+                    plt.suptitle('t = %03d' % (mag_times[snap_num]))
                     plt.tight_layout()
-                    plt.show()
+                    plt.savefig('./mag_plots/%04d.png' % snap)
+
+                    plt.close()
 
             plt.suptitle('t = %d' % (snap*0.5))
             plt.tight_layout()
@@ -253,6 +266,7 @@ if len(sys.argv) > 1:
 else:
     snap = -1
 
-compare_mags(0, snap = snap,envelope_factor = -1.0)
+for snap in range(499):
+    compare_mags(0, snap = snap,envelope_factor = -1.0)
 
 

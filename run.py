@@ -20,7 +20,7 @@ from scipy.optimize import curve_fit
 from scipy.io import netcdf_file
 
 from obtain_sharps import obtain_sharp, lookup_sharp
-from convert_sharps import sharp_info, convert_sharp
+from convert_sharps import sharp_info, convert_sharp, synthetic_info
 
 if len(sys.argv) > 1:
     run = int(sys.argv[1])
@@ -48,7 +48,8 @@ except:
     hflag = 0
     winflag = 1
 
-sharp_id = 956 #1449
+sharp_id = 956 #1449  #Set to -1 for it to figure this out on its own (can be slow)
+use_synthetic = False   #Use the synthetic magnetograms from 'magnetograms' folder
 
 sharps_directory = '/extra/tmp/trcn27/sharps/'
 max_mags = 1000 #Maximum number of input magnetograms (won't convert all the import data)
@@ -188,41 +189,52 @@ class Grid():
 
 #Step 0: If sharp data isn't downloaded yet, do that. May take some time.
 
-if sharp_id < 0:
-    sharp_id = lookup_sharp(region_id)   #Attempt to find valid HARP number from the active region id
-    print('SHARP ID found:', sharp_id)
+if not use_synthetic:
+    if sharp_id < 0:
+        sharp_id = lookup_sharp(region_id)   #Attempt to find valid HARP number from the active region id
+        print('SHARP ID found:', sharp_id)
 
-if check_data or not os.path.exists(sharps_directory + '%05d_raw/' % sharp_id):
-    if not os.path.exists(sharps_directory + '%05d_raw/' % sharp_id):
-        print('No data exists. Will attempt to download...')
-        obtain_sharp(sharp_id, sharps_directory, plot_flag = True)
-    else:
-        print('Some raw sharp data found. Checking if this is everything...')
-        if os.path.exists('./parameters/raw_times%05d.npy' % sharp_id):
-            #Check number of mags from the raw times
-            nmags = len(np.load('./parameters/raw_times%05d.npy' % sharp_id))
-            print(nmags, 'magnetograms required')
-            if os.path.exists(sharps_directory + '%05d_raw/%05d_%05d.nc' % (sharp_id, sharp_id, nmags-1)):
-                print('Data exists up to the end of the required time')
-            else:
-                print('Data download incomplete. Trying to download remaining files...')
-                obtain_sharp(sharp_id, sharps_directory, plot_flag = True)
-        else:
-            #Doesn't exist yet, so need to (slowly) obtain the data for how many mags
-            print('Data somehow incomplete. Trying to download again...')
+    if check_data or not os.path.exists(sharps_directory + '%05d_raw/' % sharp_id):
+        if not os.path.exists(sharps_directory + '%05d_raw/' % sharp_id):
+            print('No data exists. Will attempt to download...')
             obtain_sharp(sharp_id, sharps_directory, plot_flag = True)
+        else:
+            print('Some raw sharp data found. Checking if this is everything...')
+            if os.path.exists('./parameters/raw_times%05d.npy' % sharp_id):
+                #Check number of mags from the raw times
+                nmags = len(np.load('./parameters/raw_times%05d.npy' % sharp_id))
+                print(nmags, 'magnetograms required')
+                if os.path.exists(sharps_directory + '%05d_raw/%05d_%05d.nc' % (sharp_id, sharp_id, nmags-1)):
+                    print('Data exists up to the end of the required time')
+                else:
+                    print('Data download incomplete. Trying to download remaining files...')
+                    obtain_sharp(sharp_id, sharps_directory, plot_flag = True)
+            else:
+                #Doesn't exist yet, so need to (slowly) obtain the data for how many mags
+                print('Data somehow incomplete. Trying to download again...')
+                obtain_sharp(sharp_id, sharps_directory, plot_flag = True)
 
 
-print('____________________________________________')
-#Step 1: Import sharp magnetograms and do some processing on them.
-#_____________________________________________________________________
+    print('____________________________________________')
+    #Step 1: Import sharp magnetograms and do some processing on them.
+    #_____________________________________________________________________
 
-#Takes the raw .nc files and reduces (using 2D smoothing) to a sensible resolution
-#Will save these out, for now, but should be deleted as per.
-#Also onto staggered grid so they match with the original synthesised magnetograms
-print('Importing SHARP data from number', sharp_id)
+    #Takes the raw .nc files and reduces (using 2D smoothing) to a sensible resolution
+    #Will save these out, for now, but should be deleted as per.
+    #Also onto staggered grid so they match with the original synthesised magnetograms
+    print('Importing SHARP data from number', sharp_id)
 
-import_nx, import_ny, start, end = sharp_info(sharp_id, sharps_directory)
+    import_nx, import_ny, start, end = sharp_info(sharp_id, sharps_directory)
+
+else:
+    sharp_id = 0; last_magnetogram_time = 250.0
+
+    mag_input_directory = './magnetograms/'
+    print('Using synthetic magnetograms from folder ', mag_input_directory)
+    #Test that they're all there...
+    import_nx, import_ny, start, end = synthetic_info(sharp_id, mag_input_directory)
+    raw_mag_times = np.linspace(0.0, last_magnetogram_time, end-start)/time_per_snap
+    np.save('./parameters/raw_times%05d.npy' % sharp_id, raw_mag_times)
 
 print('Using raw data from ', start, ' to ', end)
 #Use the import ratios to establish the grid.
@@ -246,24 +258,33 @@ print('____________________________________________')
 
 grid = Grid()
 
-#Check if converted SHARPs already exist, to avoid doing this unecessarily
-if os.path.exists(sharps_directory + '%05d_mag/' % sharp_id):
-    if len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id)) > 1 and not recalculate_inputs:
-        print('Importing existing converted magnetic field...')
+
+if not use_synthetic:
+    #Check if converted SHARPs already exist, to avoid doing this unecessarily
+    if os.path.exists(sharps_directory + '%05d_mag/' % sharp_id):
+        if len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id)) > 1 and not recalculate_inputs:
+            print('Importing existing converted magnetic field...')
+        else:
+            print('Converting raw SHARPS onto this grid')
+            convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
+
     else:
         print('Converting raw SHARPS onto this grid')
         convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
 
-else:
-    print('Converting raw SHARPS onto this grid')
-    convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
+    nmags = len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id))
 
-nmags = len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id))
+else:
+    print('Converting synthetic magnetograms to the correct resolution etc.')
+    convert_sharp(grid, sharp_id, mag_input_directory, start=start, end=end, max_mags = max_mags, plot = True, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
+    nmags = len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id))
 
 if os.path.exists('./parameters/raw_times%05d.npy' % sharp_id):
     raw_mag_times = np.load('./parameters/raw_times%05d.npy' % sharp_id)
 else:
     raw_mag_times = np.linspace(0.0, last_magnetogram_time, nmags)
+    np.save('./parameters/raw_times%05d.npy' % sharp_id, raw_mag_times)
+
 
 mag_times = np.load('./parameters/mag_times%05d.npy' % sharp_id)
 mag_times = (mag_times - mag_times[0])*time_per_snap
@@ -366,7 +387,7 @@ print('____________________________________________')
 print('Calculating initial boundary conditions...')
 
 mag_root = sharps_directory + '%05d_mag/' % sharp_id
-pad_cells = int(np.sum(np.abs(bz[grid.ny//2,:]) < 1e-10)//2) - 1   #Number of cells from each boundary to ignore
+pad_cells = int(nx*padding_factor/2)  #Number from boundary to ignore
 
 print('Pad cells', pad_cells)
 #Compute lower boundary electrics for a zero omega, initially.
@@ -417,7 +438,9 @@ for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_
     stopnext = False
 
     hardmax = 0.1
+
     while go:
+
         #Find the ideal omega
         if stopnext:
             go = False

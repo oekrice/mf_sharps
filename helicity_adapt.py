@@ -33,6 +33,8 @@ for ri in range(3):
 t_ref = np.load(root1 + 't_ref.npy')
 h_ref = np.load(root1 + 'h_ref.npy')
 
+print(h_ref)
+
 axs[0].plot(t_ref, h_ref, c = 'black', linestyle = 'dashed', label = 'MHD Reference')
 axs[0].set_xlim(0,t_ref[-1])
 axs[0].set_title('In-plane Helicity $H$')

@@ -493,8 +493,11 @@ class compute_electrics_bounded():
             div_test = grid.div_E(ex, ey)
 
             if np.max(np.abs(curl_test[1:-1,1:-1] + diff[1:-1,1:-1])) > 1e-10:
+                print(np.max(np.abs(curl_test[1:-1,1:-1] + diff[1:-1,1:-1])))
                 raise Exception('Electric field calculation failed')
+
             if np.max(np.abs(div_test[1:-1,1:-1] - D[1:-1,1:-1])) > 1e-10:
+                print(np.max(np.abs(div_test[1:-1,1:-1] - D[1:-1,1:-1])))
                 raise Exception('Electric field calculation failed')
 
 

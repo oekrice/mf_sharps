@@ -52,6 +52,8 @@ class Fltrace():
             data_directory = ('./Data/%03d/' % run)
 
 
+        if not os.path.isdir('./fancies'):
+            os.mkdir('./fancies')
 
         self.show = show
         self.machine_flag = machine_flag
@@ -90,7 +92,7 @@ class Fltrace():
         self.ds = 0.05 #Tracing 'timestep' as a proportion of the grid size
         self.weakness_limit = 1e-5  #Minimum field strength to stop plotting
         self.line_plot_length = 100  #To save time while plotting, reduce the length of the plotted lines
-        self.nlines = 50000#1000000#200000
+        self.nlines = 100000#1000000#200000
 
         #Import bz as a test of the resolutions (and for the pyvista plot)
         self.nx = np.shape(self.bz)[0]
@@ -308,7 +310,6 @@ def determine_scales(snap_min, snap_max):
 
     allscales = []
     for snap in range(snap_min, snap_max):
-
         try:
             data = netcdf_file('./fl_data/emiss%04d.nc' % snap, 'r', mmap=False)
             xsum = np.swapaxes(data.variables['emiss_xsum'][:],0,1)
@@ -323,13 +324,18 @@ def determine_scales(snap_min, snap_max):
 
                 pc = (np.sum([toplot > 1e-5])/np.sum([toplot >= 0.0]))
                 pc_total = 100 - 0.1*pc
-                vmax = np.percentile(toplot, pc_total)
+                #Don't use bottom few cells for the side ones  -- too dark
+                if i > 0:
+                    vmax = np.percentile(toplot[:,], pc_total)
+                else:
+                    vmax = np.percentile(toplot[:,int(1024*0.025):], pc_total)
 
                 scale.append(vmax)
 
             allscales.append(scale)
-
+            print('Snap', snap, 'scales', scale)
         except:
+            allscales.append(allscales[-1]) #Assume it's just the last one...
             pass
 
     allscales = np.array(allscales)
@@ -370,21 +376,23 @@ nset = 1 #Number of concurrent runs. Receives input 0-(nset-1)
 #snap_max = 94
 skip = 1
 
-for run in range(run, run+1):
-    for snap in range(snap_min, snap_max, skip):
-        print('Run number', run, 'Plot number', snap_min)
-        fltrace = Fltrace(run = run, snap = snap, show = show)
-        fltrace.trace_lines()
-        fltrace.plot_emiss()
+if False:
+    for run in range(run, run+1):
+        for snap in range(snap_min, snap_max, skip):
+            print('Run number', run, 'Plot number', snap_min)
+            fltrace = Fltrace(run = run, snap = snap, show = show)
+            fltrace.trace_lines()
+            fltrace.plot_emiss()
 
-        os.system('rm ./fl_data/flparameters%04d.txt' % fltrace.snap)
-        os.system('rm ./fl_data/starts%04d.txt' % fltrace.snap)
+            os.system('rm ./fl_data/flparameters%04d.txt' % fltrace.snap)
+            os.system('rm ./fl_data/starts%04d.txt' % fltrace.snap)
 
         #snap_min = snap_min + nset
 
+if True:
     #Redo with nicer scales...
     allscales = determine_scales(snap_min, snap_max)
-    for snap in range(snap_min, min(len(allscales), snap_max), skip):
+    for snap in range(snap_min, min(len(allscales), snap_max)):
         fltrace = Fltrace(run = run, snap = snap, show = show)
 
         fltrace.plot_emiss(snap = snap, allscales = allscales)

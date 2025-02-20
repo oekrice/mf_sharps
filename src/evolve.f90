@@ -299,33 +299,31 @@ SUBROUTINE import_surface_magnetic(flow_number)
     surf_bx0 = 0.0_num; surf_by0 = 0.0_num
     surf_bx1 = 0.0_num; surf_by1 = 0.0_num
 
-    if (flow_number < 499) then
-        write (flow_id,'(I4.4)') flow_number
-        write (run_id,'(I3.3)') init_number
+    write (flow_id,'(I4.4)') flow_number
+    write (run_id,'(I3.3)') init_number
 
-        electric_filename = trim("./efields/"//trim(run_id)//'/'//trim(flow_id)//'.nc')
+    electric_filename = trim("./efields/"//trim(run_id)//'/'//trim(flow_id)//'.nc')
 
-        call try(nf90_open(trim(electric_filename), nf90_nowrite, ncid))
+    call try(nf90_open(trim(electric_filename), nf90_nowrite, ncid))
 
-        call try(nf90_inq_varid(ncid, 'bx_0', vid))
-        call try(nf90_get_var(ncid, vid, surf_bx0(0:nx,0:ny+1), &
-        start = (/x_rank*nx+1,y_rank*ny+1/),count = (/nx+1,ny+2/)))
+    call try(nf90_inq_varid(ncid, 'bx_0', vid))
+    call try(nf90_get_var(ncid, vid, surf_bx0(0:nx,0:ny+1), &
+    start = (/x_rank*nx+1,y_rank*ny+1/),count = (/nx+1,ny+2/)))
 
-        call try(nf90_inq_varid(ncid, 'bx_1', vid))
-        call try(nf90_get_var(ncid, vid, surf_bx1(0:nx,0:ny+1), &
-        start = (/x_rank*nx+1,y_rank*ny+1/),count = (/nx+1,ny+2/)))
+    call try(nf90_inq_varid(ncid, 'bx_1', vid))
+    call try(nf90_get_var(ncid, vid, surf_bx1(0:nx,0:ny+1), &
+    start = (/x_rank*nx+1,y_rank*ny+1/),count = (/nx+1,ny+2/)))
 
-        call try(nf90_inq_varid(ncid, 'by_0', vid))
-        call try(nf90_get_var(ncid, vid, surf_by0(0:nx+1,0:ny), &
-        start = (/x_rank*nx+1,y_rank*ny+1/),count = (/nx+2,ny+1/)))
+    call try(nf90_inq_varid(ncid, 'by_0', vid))
+    call try(nf90_get_var(ncid, vid, surf_by0(0:nx+1,0:ny), &
+    start = (/x_rank*nx+1,y_rank*ny+1/),count = (/nx+2,ny+1/)))
 
-        call try(nf90_inq_varid(ncid, 'by_1', vid))
-        call try(nf90_get_var(ncid, vid, surf_by1(0:nx+1,0:ny), &
-        start = (/x_rank*nx+1,y_rank*ny+1/),count = (/nx+2,ny+1/)))
+    call try(nf90_inq_varid(ncid, 'by_1', vid))
+    call try(nf90_get_var(ncid, vid, surf_by1(0:nx+1,0:ny), &
+    start = (/x_rank*nx+1,y_rank*ny+1/),count = (/nx+2,ny+1/)))
 
-        call try(nf90_close(ncid))
+    call try(nf90_close(ncid))
 
-    end if
 
 END SUBROUTINE import_surface_magnetic
 

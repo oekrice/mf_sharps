@@ -67,6 +67,38 @@ def sharp_info(sharp_id, root_fname):
 
     return bp.shape[0], bp.shape[1], start, end
 
+def synthetic_info(sharp_id, root_fname):
+    #For a series of SHARP data, returns the first and last good file, and the resolutions
+    raw_directory = root_fname
+    #Check length of this list against info
+
+    flist = os.listdir(raw_directory)
+    flist.sort()
+
+    missing_files = []
+    #Check all are downloaded
+    count = 0
+    for fi, fname in enumerate(flist):
+        if count != int(fname[:-3]):
+            missing_fname = raw_directory + '%04d.nc' % (count)
+            print('File in sequence not found:', missing_fname)
+            missing_files.append(missing_fname)
+            count += 1
+        count += 1
+
+    start = 0; end = 0
+    for fi, fname in enumerate(flist):
+        try:
+            data = netcdf_file(raw_directory + fname, 'r', mmap=False)
+            bz = np.swapaxes(data.variables['bz'][:], 0,1)
+            data.close()
+            end  = fi
+        except:
+            break
+
+
+    return bz.shape[0], bz.shape[1], start, end
+
 def balance_flux(field):
     #While retaining the sign of each cell, enforces proper flux balance. Can do this in the convert stage, alternatively.
     #This shouldn't be necessary if the initial data has been balanced
@@ -97,10 +129,17 @@ def balance_flux(field):
 def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 10000, plot = False, normalise = False, envelope_factor = -1, padding_factor = 0):
     #Imports the grid data, sharp id and the start and end frames to plot
     #Generally will be a mess at the start and end, so ignore those bits.
-    print('Converting raw data from SHARP', sharp_id)
     #for import_number in range(start, end):
-    output_dir = root_fname + '%05d_mag/' % sharp_id
-    raw_directory = root_fname + '%05d_raw/' % sharp_id
+    if sharp_id > 0:
+        output_dir = root_fname + '%05d_mag/' % sharp_id
+    else:
+        output_dir = '/extra/tmp/trcn27/sharps/' + '%05d_mag/' % sharp_id
+
+    if sharp_id > 0:
+        print('Converting raw data from SHARP', sharp_id)
+        raw_directory = root_fname + '%05d_raw/' % sharp_id
+    else:
+        raw_directory = root_fname
 
     if os.path.exists(output_dir):
         for fname in os.listdir(output_dir):
@@ -120,42 +159,66 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
 
         mag_times.append(raw_mag_times[fi])
 
-        fname = raw_directory + '%05d_%05d.nc' % (sharp_id, fi)
+        if sharp_id > 0:
+            fname = raw_directory + '%05d_%05d.nc' % (sharp_id, fi)
 
-        data = netcdf_file(fname, 'r', mmap=False)
-        bp = np.swapaxes(data.variables['Bp'][:], 0,1)
-        bt = np.swapaxes(data.variables['Bt'][:], 0,1)
-        br = np.swapaxes(data.variables['Br'][:], 0,1)
-        try:
-            data = netcdf_file(fname, 'r', mmap=False)
-            bp = np.swapaxes(data.variables['Bp'][:], 0,1)
-            bt = np.swapaxes(data.variables['Bt'][:], 0,1)
-            br = np.swapaxes(data.variables['Br'][:], 0,1)
-            data.close()
+            try:
+                data = netcdf_file(fname, 'r', mmap=False)
+                bp = np.swapaxes(data.variables['Bp'][:], 0,1)
+                bt = np.swapaxes(data.variables['Bt'][:], 0,1)
+                br = np.swapaxes(data.variables['Br'][:], 0,1)
+                data.close()
 
-        except:
-            print('Data error with fname', fname, '. Attempting to re-download...')
-            obtain_sharp(sharp_id, root_fname, files = [fname])
+            except:
+                print('Data error with fname', fname, '. Attempting to re-download...')
+                obtain_sharp(sharp_id, root_fname, files = [fname])
 
-            data = netcdf_file(fname, 'r', mmap=False)
-            bp = np.swapaxes(data.variables['Bp'][:], 0,1)
-            bt = np.swapaxes(data.variables['Bt'][:], 0,1)
-            br = np.swapaxes(data.variables['Br'][:], 0,1)
-            data.close()
+                data = netcdf_file(fname, 'r', mmap=False)
+                bp = np.swapaxes(data.variables['Bp'][:], 0,1)
+                bt = np.swapaxes(data.variables['Bt'][:], 0,1)
+                br = np.swapaxes(data.variables['Br'][:], 0,1)
+                data.close()
 
-            continue
+                continue
 
-        #Need to flip the coordinates of bt and bp (just negative) and do some blurring.
-        #Amount of blurring still to be decided, but shouldn't matter too much
-        grid_downscale = bp.shape[0]/grid.nx
+            #Need to flip the coordinates of bt and bp (just negative) and do some blurring.
+            #Amount of blurring still to be decided, but shouldn't matter too much
+            grid_downscale = bp.shape[0]/grid.nx
 
-        if grid_downscale < 2.0:
-            raise Exception('Interpolating to a very fine grid. Consider not doing that...')
+            if grid_downscale < 2.0:
+                raise Exception('Interpolating to a very fine grid. Consider not doing that...')
 
-        #NOT SURE WHETHER TO FLIP SIGNS HERE. I THINK IT'S JUST y/theta
-        bx_smooth = gaussian_filter(bp, sigma = grid_downscale*0.5)
-        by_smooth = gaussian_filter(-bt, sigma = grid_downscale*0.5)
-        bz_smooth = gaussian_filter(br, sigma = grid_downscale*0.5)
+            #NOT SURE WHETHER TO FLIP SIGNS HERE. I THINK IT'S JUST y/theta
+            bx_smooth = gaussian_filter(bp, sigma = grid_downscale*0.5)
+            by_smooth = gaussian_filter(-bt, sigma = grid_downscale*0.5)
+            bz_smooth = gaussian_filter(br, sigma = grid_downscale*0.5)
+
+        else:
+            fname = raw_directory + '%04d.nc' % (fi)
+
+            try:
+                data = netcdf_file(fname, 'r', mmap=False)
+                bx = data.variables['bx'][:]
+                by = data.variables['by'][:]
+                bz = data.variables['bz'][:]
+                bx = 0.5*(bx[1:,:] + bx[:-1,:])
+                by = 0.5*(by[:,1:] + by[:,:-1])
+                data.close()
+
+            except:
+                raise Exception('Input magnetograms not quite right...')
+
+            #Need to flip the coordinates of bt and bp (just negative) and do some blurring.
+            #Amount of blurring still to be decided, but shouldn't matter too much
+            grid_downscale = bx.shape[0]/grid.nx
+
+            if grid_downscale < 2.0:
+                raise Exception('Interpolating to a very fine grid. Consider not doing that...')
+
+            #NOT SURE WHETHER TO FLIP SIGNS HERE. I THINK IT'S JUST y/theta
+            bx_smooth = gaussian_filter(bx, sigma = grid_downscale*0.5)
+            by_smooth = gaussian_filter(by, sigma = grid_downscale*0.5)
+            bz_smooth = gaussian_filter(bz, sigma = grid_downscale*0.5)
 
         #Interpolate onto the STAGGERED grid (just linearly)
         #If padding, need to be more smart here
@@ -182,15 +245,14 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
         by_out = gaussian_filter(by_out, sigma = 0.5)
         bz_out = gaussian_filter(bz_out, sigma = 0.5)
 
-
-        # toplot = bz_out.T
-        # plt.imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
-        # plt.show()
-
         if normalise:
             bz_out[1:-1,1:-1] = balance_flux(bz_out)
             if fi == start:
-                norm_factor = np.max(np.abs(bz_out))
+                if sharp_id > 0:
+                    norm_factor = np.max(np.abs(bz_out))
+                else:
+                    norm_factor = 1.0
+
             bx_out = bx_out/norm_factor
             by_out = by_out/norm_factor
             bz_out = bz_out/norm_factor
@@ -205,13 +267,22 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
             toplot = bz_smooth.T
             axs[1,2].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
 
-            toplot = bp.T
-            axs[0,0].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
-            toplot = bt.T
+            if sharp_id > 0:
+                toplot = bp.T
+                axs[0,0].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
+                toplot = bt.T
 
-            axs[0,1].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
-            toplot = br.T
-            axs[0,2].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
+                axs[0,1].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
+                toplot = br.T
+                axs[0,2].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
+            else:
+                toplot = bx.T
+                axs[0,0].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
+                toplot = by.T
+
+                axs[0,1].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
+                toplot = bz.T
+                axs[0,2].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
 
             toplot = bx_out.T
             axs[2,0].imshow(toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
