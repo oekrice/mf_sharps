@@ -49,7 +49,7 @@ except:
     winflag = 1
 
 sharp_id = 956 #1449  #Set to -1 for it to figure this out on its own (can be slow)
-use_synthetic = False   #Use the synthetic magnetograms from 'magnetograms' folder
+use_synthetic = True   #Use the synthetic magnetograms from 'magnetograms' folder
 
 sharps_directory = '/extra/tmp/trcn27/sharps/'
 max_mags = 1000 #Maximum number of input magnetograms (won't convert all the import data)
@@ -60,17 +60,20 @@ envelope_factor = -1.0 #If positive, smoothly drops the input magnetogram to zer
 padding_factor = 0.25 #Adds a given padding distance to the x,y dimensions to allow the electric fields to match there. 0 Does nothing.
 
 normalise_inputs = True       #If True, will normalise all the magnetic fields such that the max radial component is 1. Also adresses flux balance.
-dothings = True
+dothings = False
 check_data = dothings
 recalculate_inputs = dothings   #Redo the interpolation from the SHARP inputs onto this grid
-recalculate_init = dothings       #Recalculates the initial potential field
-recalculate_boundary = True  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
+recalculate_init = True       #Recalculates the initial potential field
+recalculate_boundary = dothings  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
+use_existing_boundary = False #If True, doesn't attempt to match helicity -- just uses existing boundary conditions from mf_mags (must exist, obviously)
+existing_boundary_num = 31 #Run number of such a boundary
+adapt_omega = False
 
-nx = 196
+nx = 96
 
 #DYNAMIC SYSTEM PARAMETERS
 #-------------------------------------
-voutfact = -1.0   #Outflow speed. If negative, will go for as much as possible without instabilities
+voutfact = 0.0   #Outflow speed. If negative, will go for as much as possible without instabilities
 shearfact = 0.0#3.7e-5   #factor by which to change the imported 'speed'
 eta0 = 0.0
 
@@ -83,25 +86,29 @@ nu0 = 10.0
 eta = 5e-4*nu0
 #eta = 1.0
 
-x0 = -100.0; x1 = 100.0   #Keep this as 100, no matter what the domain size is. Because that seemed to work.
-y0 = -100.0; y1 = 100.0
-z0 = 0.0; z1 = 100.0
+x0 = -130.0; x1 = 130.0   #Keep this as 100, no matter what the domain size is. Because that seemed to work.
+y0 = -130.0; y1 = 130.0
+z0 = 0.0; z1 = 130.0
 
-init_number = run
+if use_existing_boundary:
+    init_number = existing_boundary_num
+else:
+    init_number = run
+
 omega = 0.0
 
 #Variables for the pressure term
-decay_type = 0  #Decay types -- 0 for none, 1 for exponential, 2/3 for tanh. Same as the 2D cases.
+decay_type = 3  #Decay types -- 0 for none, 1 for exponential, 2/3 for tanh. Same as the 2D cases.
 
 if decay_type == 0: #No pressure
     zstar = 0.0; a = 0.0; b = 0.0; deltaz = 0.0
 
 if decay_type == 1: #exponential decay
-    zstar = run#np.linspace(0.0,0.3,10)[run//50]*z1
+    zstar = 0.1*run*z1
     if zstar > 0:
         b = zstar/np.log(2)
         a = 0.5
-        deltaz = 0.0*z1
+        deltaz = 0.1*z1
     else:
         decay_type = 0
         zstar = 0.0; a = 0.0; b = 0.0; deltaz = 0.0
@@ -113,7 +120,7 @@ if decay_type == 2: #smooth tanh
 
 if decay_type == 3: #sharp tanh
     a = 0.25; b = 1.0
-    zstar = np.linspace(0.0,0.3,7)[run]*z1
+    zstar = 0.2*z1#0.1*(run)*z1
     deltaz = 0.02*z1
 
 #SOME FOLDER ADMIN
@@ -180,8 +187,6 @@ class Grid():
         self.ys = np.linspace(self.y0,self.y1,self.ny+1)
         self.yc = np.linspace(self.y0-self.dy/2, self.y1+self.dy/2, self.ny+2)
 
-        self.z0 = self.z0*self.nz/self.nx
-        self.z1 = self.z1*self.nz/self.nx
         self.dz = (self.z1 - self.z0)/nz
         self.zs = np.linspace(self.z0,self.z1,self.nz+1)
         self.zc = np.linspace(self.z0-self.dz/2, self.z1+self.dz/2, self.nz+2)
@@ -241,18 +246,24 @@ print('Using raw data from ', start, ' to ', end)
 #Resolutions will be based on the ratio of the imported data, based on the nx above
 aspect_init = import_ny/import_nx
 #Account for padding around the initial magnetogram. Assuming nx is longer. Which it might not be.
+print(import_ny, import_nx, padding_factor)
+
 if aspect_init < 1.0:
     new_aspect = (aspect_init + padding_factor)/(1.0 + padding_factor)
 else:
     new_aspect = (1.0 + padding_factor)/(aspect_init + padding_factor)
 
+print(import_ny, import_nx, padding_factor, new_aspect)
+
 print('Zero padding factor', padding_factor, 'aspects', aspect_init, new_aspect)
 ny = int(nx*new_aspect)
-ny = 4*(ny//4)
-nz = min(nx, ny)
+ny = 8*(ny//8)
+nz = int((z1-z0)*nx/(x1-x0))
+nz = 8*(nz//8)
 
 print('Variables established. Making grid.')
 print('New grid resolutions:', nx, ny, nz)
+print('Grid boundaries', x0, x1, y0, y1, z0, z1)
 
 print('____________________________________________')
 
@@ -275,9 +286,19 @@ if not use_synthetic:
     nmags = len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id))
 
 else:
-    print('Converting synthetic magnetograms to the correct resolution etc.')
-    convert_sharp(grid, sharp_id, mag_input_directory, start=start, end=end, max_mags = max_mags, plot = True, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
-    nmags = len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id))
+    if os.path.exists(sharps_directory + '%05d_mag/' % sharp_id):
+        if len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id)) > 1 and not recalculate_inputs:
+            print('Importing existing converted magnetic field...')
+            nmags = len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id))
+
+        else:
+            print('Converting synthetic magnetograms to the correct resolution etc.')
+            convert_sharp(grid, sharp_id, mag_input_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
+            nmags = len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id))
+    else:
+        print('Converting synthetic magnetograms to the correct resolution etc.')
+        convert_sharp(grid, sharp_id, mag_input_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
+        nmags = len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id))
 
 if os.path.exists('./parameters/raw_times%05d.npy' % sharp_id):
     raw_mag_times = np.load('./parameters/raw_times%05d.npy' % sharp_id)
@@ -384,15 +405,37 @@ else:
 
 print('____________________________________________')
 
-print('Calculating initial boundary conditions...')
+print('Finding initial boundary conditions...')
 
 mag_root = sharps_directory + '%05d_mag/' % sharp_id
 pad_cells = int(nx*padding_factor/2)  #Number from boundary to ignore
 
-print('Pad cells', pad_cells)
+print('Whitespace padding cells:', pad_cells)
 #Compute lower boundary electrics for a zero omega, initially.
 #This will save out reference helicities, as well.
+
+#If asked, check if existing boundary conditions match... If not, need to recalculate
+
+if use_existing_boundary:
+    #Check number of files in this folder, and for any missing
+    for check in range(nmags-1):
+        fname_check = './efields/%03d/%04d.nc' % (existing_boundary_num, check)
+        if not os.path.isfile(fname_check):
+            use_existing_boundary = False
+            raise Exception('Existing boundary conditions dont exist... ', fname_check)
+        else:
+            data = netcdf_file(fname_check, 'r', mmap=False)
+            init_res = np.swapaxes(data.variables['ex'][:], 0, 1).shape
+            data.close()
+
+            if not(init_res[0] -2 == nx and init_res[1] - 1 == ny):
+                use_existing_boundary = False
+                raise Exception('Existing boundary conditions are the wrong resolution...', fname_check)
+
+    print('Existing boundary conditions imported from run  ', existing_boundary_num)
+
 if recalculate_boundary:
+    #Calculates the boundary with ZERO twist to begin with
     compute_electrics_bounded(run, init_number, mag_root, mag_times, omega = 0.0, start = 0, end = nmags-1, initialise = True, plot = False, pad_cells = pad_cells)
 
 bx, by, bz = read_boundary('./inits/init%03d.nc' % init_number)
@@ -401,7 +444,6 @@ hfield = compute_inplane_helicity(grid, bx, by, bz)
 hsum = np.sum(hfield[pad_cells:-pad_cells,pad_cells:-pad_cells])
 
 check = np.sqrt(np.abs(hsum))*np.sign(hsum)
-
 
 if mag_start != 0:
     halls = np.load('./hdata/halls%03d.npy' % run)
@@ -424,123 +466,134 @@ if hflag < 0.5:
 
 hrefs = np.load('./hdata/h_ref.npy').tolist()
 
-nmags_per_run = 5   #How many magnetic field INTERVALS to run for a given magnetofrictional chunk, with constant omega in each case
+nmags_per_run = 500   #How many magnetic field INTERVALS to run for a given magnetofrictional chunk, with constant omega in each case
+if not use_existing_boundary and adapt_omega:
+    for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_run):
 
-for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_run):
+        if block_start > 0:
+            omega = omegas[block_start-1]
+        block_end = min(block_start + nmags_per_run, nmags-1)
 
-    if block_start > 0:
-        omega = omegas[block_start-1]
-    block_end = min(block_start + nmags_per_run, nmags-1)
+        xs = []; ys = []  #For the function interpolation
 
-    xs = []; ys = []  #For the function interpolation
+        go  = True
+        stopnext = False
 
-    go  = True
-    stopnext = False
+        hardmax = 0.1
 
-    hardmax = 0.1
+        while go:
 
-    while go:
+            #Find the ideal omega
+            if stopnext:
+                go = False
 
-        #Find the ideal omega
-        if stopnext:
-            go = False
-
-        if mag_start > 0:
-            back = max(0, block_start - 5)
-            maxomega = max(np.abs(omegas[block_start-back:block_start])*2.0)  #Change this dynamically to keep things within range
-        else:
-            maxomega = hardmax
-
-        maxomega = min(maxomega, hardmax)
-        minomega = -maxomega
-
-        omega = max(minomega, omega)
-        omega = min(maxomega, omega)
-
-        omega_range = maxomega - minomega
-        print('Running step from', block_start, 'to', block_end, 'omega = ', omega)
-        print('Minmax', minomega, maxomega)
-        efield_data = compute_electrics_bounded(run, init_number, mag_root, mag_times, omega = omega, start = block_start, end = block_end, initialise = False, plot = False, pad_cells = pad_cells)
-
-        variables[29] = block_start
-        variables[30] = block_end
-
-        np.savetxt('parameters/variables%03d.txt' % run, variables)   #variables numbered based on run number (up to 1000)
-
-        #print('Using output directory "%s"' % (data_directory))
-        if nprocs <= 4:
-            os.system('/usr/lib64/openmpi/bin/mpiexec ffpe-summary=none -np %d ./bin/mf3d %d' % (nprocs, run))
-        else:
-            os.system('/usr/lib64/openmpi/bin/mpiexec -np %d --oversubscribe ./bin/mf3d %d' % (nprocs, run))
-
-        #Check helicity against reference
-
-        #Want to add the option to use other measures here, so probably shouldn't call it helicity
-        end_fname = './mf_mags/%03d/%04d.nc' % (run, block_end)
-
-        bx, by, bz = read_boundary(end_fname)
-        hfield = compute_inplane_helicity(grid, bx, by, bz)
-        hsum = np.sum(hfield[pad_cells:-pad_cells,pad_cells:-pad_cells])
-
-        check = np.sqrt(np.abs(hsum))*np.sign(hsum)
-
-        target = hrefs[block_end]
-
-
-        print('Check, target', check, target)
-        #THIS ASSUMES A ZERO INTERCEPT RATHER THAN MINIMISING ANYTHING
-
-        xs.append(omega); ys.append(check - target)
-
-        if abs(check - target) < 1e-1:   #Close enough
-            go = False
-            print('GOOD ENOUGH',  omega, check-target, xs, ys)
-            #Update helicities
-            halls[block_end] = check
-            omegas[block_start] = omega
-            tplots[block_end] = mag_times[block_end]
-
-            for snap in range(block_start, block_end):
-                #Update helicity tracking
-                fname = './mf_mags/%03d/%04d.nc' % (run, snap)
-
-                bx, by, bz = read_boundary(fname)
-                hfield = compute_inplane_helicity(grid, bx, by, bz)
-                hsum = np.sum(hfield[pad_cells:-pad_cells,pad_cells:-pad_cells])
-                check = np.sqrt(np.abs(hsum))*np.sign(hsum)
-
-                halls[snap] = check
-                omegas[snap] = omega
-                tplots[snap] = mag_times[snap]
-
-
-            np.save('./hdata/halls%03d.npy' % run, halls)
-            np.save('./hdata/omegas%03d.npy' % run, omegas)
-            np.save('./hdata/tplots%03d.npy' % run, tplots)
-
-        else:   #not close enough, make a better estimate
-            print('NOT GOOD ENOUGH', omega, check-target, xs, ys)
-            if len(xs) == 1:
-                if check > target and omega > minomega:
-                    omega = omega - omega_range/10
-                elif check < target and omega < maxomega:
-                    omega = omega + omega_range/10
-                else:
-                    go = False
+            if mag_start > 0:
+                back = max(0, block_start - 5)
+                maxomega = max(np.abs(omegas[block_start-back:block_start])*2.0)  #Change this dynamically to keep things within range
             else:
-                back = min(5, len(omegas))  #Take averages if that goes terribly
-                nr_target = xs[-1] - ys[-1]*((xs[-1] - xs[-2])/(ys[-1] - ys[-2]))
-                if nr_target > maxomega:
-                    omega = np.mean(omegas[block_start-back:block_start])
-                    stopnext = True
-                    print('OMEGA BIG', nr_target)
-                elif nr_target < minomega:
-                    omega = minomega
-                    omega = np.mean(omegas[block_start-back:block_start])
-                    stopnext = True
-                    print('OMEGA SMALL', nr_target)
+                maxomega = hardmax
 
+            maxomega = min(maxomega, hardmax)
+            minomega = -maxomega
+
+            omega = max(minomega, omega)
+            omega = min(maxomega, omega)
+
+            omega_range = maxomega - minomega
+            print('Running step from', block_start, 'to', block_end, 'omega = ', omega)
+            print('Minmax', minomega, maxomega)
+            efield_data = compute_electrics_bounded(run, init_number, mag_root, mag_times, omega = omega, start = block_start, end = block_end, initialise = False, plot = False, pad_cells = pad_cells)
+
+            variables[29] = block_start
+            variables[30] = block_end
+
+            np.savetxt('parameters/variables%03d.txt' % run, variables)   #variables numbered based on run number (up to 1000)
+
+            #print('Using output directory "%s"' % (data_directory))
+            if nprocs <= 4:
+                os.system('/usr/lib64/openmpi/bin/mpiexec ffpe-summary=none -np %d ./bin/mf3d %d' % (nprocs, run))
+            else:
+                os.system('/usr/lib64/openmpi/bin/mpiexec -np %d --oversubscribe ./bin/mf3d %d' % (nprocs, run))
+
+            #Check helicity against reference
+
+            #Want to add the option to use other measures here, so probably shouldn't call it helicity
+            end_fname = './mf_mags/%03d/%04d.nc' % (run, block_end)
+
+            bx, by, bz = read_boundary(end_fname)
+            hfield = compute_inplane_helicity(grid, bx, by, bz)
+            hsum = np.sum(hfield[pad_cells:-pad_cells,pad_cells:-pad_cells])
+
+            check = np.sqrt(np.abs(hsum))*np.sign(hsum)
+
+            target = hrefs[block_end]
+
+
+            print('Check, target', check, target)
+            #THIS ASSUMES A ZERO INTERCEPT RATHER THAN MINIMISING ANYTHING
+
+            xs.append(omega); ys.append(check - target)
+
+            if abs(check - target) < 1e-1:   #Close enough
+                go = False
+                print('Helicity match good enough, omega = ',  omega)
+                #Update helicities
+                halls[block_end] = check
+                omegas[block_start] = omega
+                tplots[block_end] = mag_times[block_end]
+
+                for snap in range(block_start, block_end):
+                    #Update helicity tracking
+                    fname = './mf_mags/%03d/%04d.nc' % (run, snap)
+
+                    bx, by, bz = read_boundary(fname)
+                    hfield = compute_inplane_helicity(grid, bx, by, bz)
+                    hsum = np.sum(hfield[pad_cells:-pad_cells,pad_cells:-pad_cells])
+                    check = np.sqrt(np.abs(hsum))*np.sign(hsum)
+
+                    halls[snap] = check
+                    omegas[snap] = omega
+                    tplots[snap] = mag_times[snap]
+
+
+                np.save('./hdata/halls%03d.npy' % run, halls)
+                np.save('./hdata/omegas%03d.npy' % run, omegas)
+                np.save('./hdata/tplots%03d.npy' % run, tplots)
+
+            else:   #not close enough, make a better estimate
+                print('Helicity match good enough, tried omegas = ',  xs)
+                if len(xs) == 1:
+                    if check > target and omega > minomega:
+                        omega = omega - omega_range/10
+                    elif check < target and omega < maxomega:
+                        omega = omega + omega_range/10
+                    else:
+                        go = False
                 else:
-                    print('TARGET',nr_target)
-                    omega = nr_target
+                    back = min(5, len(omegas))  #Take averages if that goes terribly
+                    nr_target = xs[-1] - ys[-1]*((xs[-1] - xs[-2])/(ys[-1] - ys[-2]))
+                    if nr_target > maxomega:
+                        omega = np.mean(omegas[block_start-back:block_start])
+                        stopnext = True
+                        print('OMEGA BIG', nr_target)
+                    elif nr_target < minomega:
+                        omega = minomega
+                        omega = np.mean(omegas[block_start-back:block_start])
+                        stopnext = True
+                        print('OMEGA SMALL', nr_target)
 
+                    else:
+                        print('TARGET',nr_target)
+                        omega = nr_target
+
+else:  #Just run with existing boundary conditions. Lovely.
+    variables[29] = mag_start
+    variables[30] = nmags-1
+
+    np.savetxt('parameters/variables%03d.txt' % run, variables)   #variables numbered based on run number (up to 1000)
+
+    print('Running entire code with no helicity matching, using existing boundary and initial conditions...')
+    if nprocs <= 4:
+        os.system('/usr/lib64/openmpi/bin/mpiexec ffpe-summary=none -np %d ./bin/mf3d %d' % (nprocs, run))
+    else:
+        os.system('/usr/lib64/openmpi/bin/mpiexec -np %d --oversubscribe ./bin/mf3d %d' % (nprocs, run))

@@ -23,6 +23,8 @@ PROGRAM main
     ! Import the parameters and set up the grid
     CALL initialise()
 
+    print*, 'timestep', dt
+
     if (.true.) then
     if (hamilton_flag < 0.5) then
         data_directory_root = '/extra/tmp/trcn27/mf3d/'

@@ -169,13 +169,14 @@ SUBROUTINE establish_grid()
 
     CHARACTER(LEN =64):: init_filename
     INTEGER:: ncid, vid
-    CHARACTER(LEN = 4):: mag_id, run_id
+    CHARACTER(LEN = 4):: mag_id, run_id, init_id
 
     write (mag_id,'(I4.4)') mag_min
     write (run_id,'(I3.3)') int(run_number)
+    write (init_id,'(I3.3)') int(init_number)
 
     if (mag_min == 0) then
-        init_filename = trim('./inits/init'//trim(run_id)//'.nc')
+        init_filename = trim('./inits/init'//trim(init_id)//'.nc')
     else
         init_filename = trim('/extra/tmp/trcn27/mf3d/'//trim(run_id)//'/'//trim(mag_id)//'.nc')
     end if
@@ -275,19 +276,23 @@ SUBROUTINE calculate_timestep()
 
     if (proc_num == 0) then
     if (nu0 > 0) dt_ideal = (min(dx,dy,dz))**2/(nu0*(1.0))
-    !if (nu0 > 0) print*, 'dt due to nu0', cfl*(min(dx,dy,dz))**2/(nu0*(1.0))
+    if (nu0 > 0) print*, 'dt due to nu0', cfl*(min(dx,dy,dz))**2/(nu0*(1.0))
     if (voutfact > 0) dt_ideal = min(dt_ideal, dz/voutfact)
-    !if (voutfact > 0) print*, 'dt due to outflow',  cfl*dz/voutfact
+    if (voutfact > 0) print*, 'dt due to outflow',  cfl*dz/voutfact
     if (eta > 0 ) dt_ideal = min(dt_ideal, min(dx,dy,dz)**2/eta)
-    !if (eta > 0 ) print*, 'dt due to eta', cfl*min(dx,dy,dz)**2/eta
+    if (eta > 0 ) print*, 'dt due to eta', cfl*min(dx,dy,dz)**2/eta
     if (shearfact > 0 ) dt_ideal = min(dt_ideal, min(dy,dx)/shearfact)
-    !if (shearfact > 0 ) print*, 'dt due to shearing', cfl*min(dy,dx)/(shearfact*15.0)
+    if (shearfact > 0 ) print*, 'dt due to shearing', cfl*min(dy,dx)/(shearfact*15.0)
     if (eta0 > 0) dt_ideal = min(dt_ideal, min(dx,dy,dz)**2/eta0)
-    !if (eta0 > 0) print*, 'dt due to eta0',  cfl*min(dx,dy,dz)**2/eta0
+    if (eta0 > 0) print*, 'dt due to eta0',  cfl*min(dx,dy,dz)**2/eta0
     dt_ideal = cfl*dt_ideal
     !print*, 'Ideal dt', dt_ideal
 
     dt = dt_ideal
+    print*, 'sharps', nx, ny, nz, dx, dy, dz
+    print*, 'xs', x0_global, x1_global
+    print*, 'ys', y0_global, y1_global
+    print*, 'zs', z0_global, z1_global
 
     !print*, 'Final dt', dt, ', total timesteps', nt, ', ', int(nt/(nplots-1)), 'per snapshot'
     end if

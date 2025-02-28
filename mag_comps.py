@@ -64,12 +64,13 @@ class compare_mags():
                     break
 
         print('Snap number', snap)
-        sharp_id = 956
+        sharp_id = 0
+        print('Sharp ID', sharp_id, '(used for reference - CHECK CORRECT)')
         grid = Grid(0)
         h_ref = []
         ts = []
         #Call run = -1 the reference case
-        runs = [-1,0]
+        runs = [-1,run]
         omegas = []
 
         scales = np.zeros((4,2))
@@ -231,8 +232,8 @@ class compare_mags():
 
                     plt.suptitle('t = %03d' % (mag_times[snap_num]))
                     plt.tight_layout()
-                    plt.savefig('./mag_plots/%04d.png' % snap)
-
+                    #plt.savefig('./mag_plots/%04d.png' % snap)
+                    plt.show()
                     plt.close()
 
             plt.suptitle('t = %d' % (snap*0.5))
@@ -259,14 +260,20 @@ class compare_mags():
             plt.savefig('helicityanalysis.png')
             plt.show()
 
-
-
 if len(sys.argv) > 1:
-    snap = int(sys.argv[1])
+    run = int(sys.argv[1])
+else:
+    run = -1
+
+
+if len(sys.argv) > 2:
+    snap = int(sys.argv[2])
 else:
     snap = -1
 
-for snap in range(499):
-    compare_mags(0, snap = snap,envelope_factor = -1.0)
+compare_mags(run, snap = snap,envelope_factor = -1.0)
+
+#for snap in range(499):
+#    compare_mags(0, snap = snap,envelope_factor = -1.0)
 
 

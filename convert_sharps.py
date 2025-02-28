@@ -97,7 +97,7 @@ def synthetic_info(sharp_id, root_fname):
             break
 
 
-    return bz.shape[0], bz.shape[1], start, end
+    return bz.shape[0], bz.shape[1], start, end + 1
 
 def balance_flux(field):
     #While retaining the sign of each cell, enforces proper flux balance. Can do this in the convert stage, alternatively.
@@ -186,6 +186,7 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
             grid_downscale = bp.shape[0]/grid.nx
 
             if grid_downscale < 2.0:
+                print(bp.shape[0], grid.nx, grid.ny, grid.nz)
                 raise Exception('Interpolating to a very fine grid. Consider not doing that...')
 
             #NOT SURE WHETHER TO FLIP SIGNS HERE. I THINK IT'S JUST y/theta
@@ -212,7 +213,8 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
             #Amount of blurring still to be decided, but shouldn't matter too much
             grid_downscale = bx.shape[0]/grid.nx
 
-            if grid_downscale < 2.0:
+            if grid_downscale < 1.0:
+                print(bx.shape, [grid.nx, grid.ny])
                 raise Exception('Interpolating to a very fine grid. Consider not doing that...')
 
             #NOT SURE WHETHER TO FLIP SIGNS HERE. I THINK IT'S JUST y/theta
@@ -251,7 +253,7 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
                 if sharp_id > 0:
                     norm_factor = np.max(np.abs(bz_out))
                 else:
-                    norm_factor = 1.0
+                    norm_factor = 0.1  #Bit of a bodge. Seems to work...
 
             bx_out = bx_out/norm_factor
             by_out = by_out/norm_factor
@@ -294,6 +296,7 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
             plt.savefig('./import_plots/%05d' % output_count)
             plt.close()
 
+        print('Converted input number', fi, end='\r')
         #Save out to new filename
 
         fid = netcdf_file(output_dir + '%04d.nc' % output_count , 'w')
@@ -323,6 +326,9 @@ def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 100
         fid.close()
 
         output_count += 1
+
+    print('                                                    ')
+    print('All inputs converted')
 
     np.save('./parameters/mag_times%05d.npy' % sharp_id, np.array(mag_times))
 

@@ -185,7 +185,7 @@ SUBROUTINE diagnostics(diag_num, first_diagnostic)
 
     end do
 
-    if (proc_num == -1) then
+    if (nprocs == 1) then  !Need to figure out which process contains this. Then it might work... CAN DO THIS BUT DON'T WANT TO
         !DO ROPE HEIGHT
         !Take the slice of relevance
         !bx_slice(1:nz_global) = bx0_global(nx_global/2, ny_global/2, 1:nz_global)

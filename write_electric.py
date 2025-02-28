@@ -381,7 +381,6 @@ class compute_electrics_bounded():
 
         for snap in range(start, end):
 
-            print('Boundary transform', snap)
             bfield_fname = '%s%04d.nc' % (data_directory, snap)
             efield_fname = '%s%03d/%04d.nc' % ('./efields/', init_number, snap)
 
@@ -611,6 +610,9 @@ class compute_electrics_bounded():
                 hrefs.append(np.sqrt(np.abs(hsum))*np.sign(hsum))
                 trefs.append(mag_times[snap])
 
+            pc = (snap + 1)/(end - start)
+            print('Electric Boundary condition', snap,  'calculated, (', int(pc*100), '%)', end='\r')
+
         if initialise:  #Calculate final one
             bfield_fname = '%s%04d.nc' % (data_directory, snap + 1)
             data = netcdf_file(bfield_fname, 'r', mmap=False)
@@ -622,8 +624,9 @@ class compute_electrics_bounded():
             hrefs.append(np.sqrt(np.abs(hsum))*np.sign(hsum))
             trefs.append(mag_times[snap+1])
 
-
+        print('                                                                            ')
         print('Electric fields', start, ' to ', end, ' calculated and saved.', envelope_factor)
+
         if initialise:
             np.save('./hdata/h_ref.npy', np.array(hrefs))
             np.save('./hdata/t_ref.npy', np.array(trefs))

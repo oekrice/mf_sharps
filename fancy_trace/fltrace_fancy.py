@@ -92,7 +92,7 @@ class Fltrace():
         self.ds = 0.05 #Tracing 'timestep' as a proportion of the grid size
         self.weakness_limit = 1e-5  #Minimum field strength to stop plotting
         self.line_plot_length = 100  #To save time while plotting, reduce the length of the plotted lines
-        self.nlines = 100000#1000000#200000
+        self.nlines = 10000#1000000#200000
 
         #Import bz as a test of the resolutions (and for the pyvista plot)
         self.nx = np.shape(self.bz)[0]
@@ -376,7 +376,7 @@ nset = 1 #Number of concurrent runs. Receives input 0-(nset-1)
 #snap_max = 94
 skip = 1
 
-if False:
+if True:
     for run in range(run, run+1):
         for snap in range(snap_min, snap_max, skip):
             print('Run number', run, 'Plot number', snap_min)
@@ -389,7 +389,7 @@ if False:
 
         #snap_min = snap_min + nset
 
-if True:
+if False:
     #Redo with nicer scales...
     allscales = determine_scales(snap_min, snap_max)
     for snap in range(snap_min, min(len(allscales), snap_max)):
