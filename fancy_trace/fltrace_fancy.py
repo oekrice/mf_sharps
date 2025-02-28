@@ -374,7 +374,7 @@ nset = 1 #Number of concurrent runs. Receives input 0-(nset-1)
 
 #snap_min = 0
 #snap_max = 94
-skip = 1
+skip = 10
 
 if True:
     for run in range(run, run+1):

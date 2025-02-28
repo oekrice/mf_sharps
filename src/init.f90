@@ -289,10 +289,6 @@ SUBROUTINE calculate_timestep()
     !print*, 'Ideal dt', dt_ideal
 
     dt = dt_ideal
-    print*, 'sharps', nx, ny, nz, dx, dy, dz
-    print*, 'xs', x0_global, x1_global
-    print*, 'ys', y0_global, y1_global
-    print*, 'zs', z0_global, z1_global
 
     !print*, 'Final dt', dt, ', total timesteps', nt, ', ', int(nt/(nplots-1)), 'per snapshot'
     end if

@@ -19,12 +19,9 @@ CONTAINS
 SUBROUTINE timestep()
 
     !New timestep with a quasi-implicit bit. Using a predictor for the magnfield of the new bit but not the old
-    !if (n < 17) then
-
     CALL calculate_magnetic()
 
     !CALL check_solenoidal()
-
     CALL calculate_jp()
 
     CALL calculate_current()
@@ -33,9 +30,10 @@ SUBROUTINE timestep()
     CALL b_to_gridpts()
 
     CALL calculate_velocity()
+
     CALL calculate_pressure()
+
     CALL calculate_electric()
-    !end if
 
     CALL MPI_Barrier(comm,ierr)  !Wait for t to be broadcast everywhere.
 
@@ -134,12 +132,6 @@ SUBROUTINE calculate_velocity
     vy = nu*(jz_lim*bx_lim - jx_lim*bz_lim)/soft
     vz = nu*(jx_lim*by_lim - jy_lim*bx_lim)/soft
 
-    vx = merge(vx, max_velocity*sign(1.0_num, vx), abs(vx) < max_velocity)
-    vy = merge(vy, max_velocity*sign(1.0_num, vy), abs(vy) < max_velocity)
-    vz = merge(vz, max_velocity*sign(1.0_num, vz), abs(vz) < max_velocity)
-
-    !print*, max_velocity, minval(abs(soft)), maxval(abs(vx)), maxval(abs(vy)), maxval(abs(vz))
-
     if (z_down < 0) then
         vx(:,:,0) = 0.0_num; vy(:,:,0) = 0.0_num; vz(:,:,0) = 0.0_num
     end if
@@ -207,35 +199,13 @@ SUBROUTINE calculate_electric()
     ex(1:nx,0:ny,0:nz) = ex(1:nx,0:ny,0:nz) + voutx(1:nx,0:ny,0:nz)*by(1:nx,0:ny,0:nz)
     ey(0:nx,1:ny,0:nz) = ey(0:nx,1:ny,0:nz) - vouty(0:nx,1:ny,0:nz)*bx(0:nx,1:ny,0:nz)
     end if
-    
+
     !Add electric field loaded in from elsewhere
     if (z_rank == 0) then
-        !ex(1:nx,0:ny,0) = surf_ex(1:nx,0:ny)
-        !ey(0:nx,1:ny,0) = surf_ey(0:nx,1:ny)
         ex(1:nx,0:ny,0) = surf_ex(1:nx,0:ny)
         ey(0:nx,1:ny,0) = surf_ey(0:nx,1:ny)
 
     end if
-
-!     if (x_rank == 0) then
-!         ex(1,:,0) = 0.0_num
-!         ey(0,:,0) = 0.0_num
-!     end if
-!
-!     if (x_rank == x_procs-1) then
-!         ex(nx,:,0) = 0.0_num
-!         ey(nx,:,0) = 0.0_num
-!     end if
-!
-!     if (y_rank == 0) then
-!         ex(:,0,0) = 0.0_num
-!         ey(:,1,0) = 0.0_num
-!     end if
-!
-!     if (y_rank == y_procs-1) then
-!         ex(:,ny,0) = 0.0_num
-!         ey(:,ny,0) = 0.0_num
-!     end if
 
 
 END SUBROUTINE calculate_electric
@@ -337,6 +307,24 @@ subroutine try(status)
     end if
 
 end subroutine try
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

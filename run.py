@@ -63,17 +63,17 @@ normalise_inputs = True       #If True, will normalise all the magnetic fields s
 dothings = False
 check_data = dothings
 recalculate_inputs = dothings   #Redo the interpolation from the SHARP inputs onto this grid
-recalculate_init = True       #Recalculates the initial potential field
+recalculate_init = dothings       #Recalculates the initial potential field
 recalculate_boundary = dothings  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
-use_existing_boundary = False #If True, doesn't attempt to match helicity -- just uses existing boundary conditions from mf_mags (must exist, obviously)
-existing_boundary_num = 31 #Run number of such a boundary
+use_existing_boundary = True  #If True, doesn't attempt to match helicity -- just uses existing boundary conditions from mf_mags (must exist, obviously)
+existing_boundary_num = 0 #Run number of such a boundary
 adapt_omega = False
 
 nx = 96
 
 #DYNAMIC SYSTEM PARAMETERS
 #-------------------------------------
-voutfact = 0.0   #Outflow speed. If negative, will go for as much as possible without instabilities
+voutfact = -1.0   #Outflow speed. If negative, will go for as much as possible without instabilities
 shearfact = 0.0#3.7e-5   #factor by which to change the imported 'speed'
 eta0 = 0.0
 
@@ -120,7 +120,7 @@ if decay_type == 2: #smooth tanh
 
 if decay_type == 3: #sharp tanh
     a = 0.25; b = 1.0
-    zstar = 0.2*z1#0.1*(run)*z1
+    zstar = run*0.3*z1#0.1*(run)*z1
     deltaz = 0.02*z1
 
 #SOME FOLDER ADMIN
@@ -246,7 +246,6 @@ print('Using raw data from ', start, ' to ', end)
 #Resolutions will be based on the ratio of the imported data, based on the nx above
 aspect_init = import_ny/import_nx
 #Account for padding around the initial magnetogram. Assuming nx is longer. Which it might not be.
-print(import_ny, import_nx, padding_factor)
 
 if aspect_init < 1.0:
     new_aspect = (aspect_init + padding_factor)/(1.0 + padding_factor)
@@ -466,7 +465,8 @@ if hflag < 0.5:
 
 hrefs = np.load('./hdata/h_ref.npy').tolist()
 
-nmags_per_run = 500   #How many magnetic field INTERVALS to run for a given magnetofrictional chunk, with constant omega in each case
+nmags_per_run = 1    #How many magnetic field INTERVALS to run for a given magnetofrictional chunk, with constant omega in each case
+
 if not use_existing_boundary and adapt_omega:
     for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_run):
 
