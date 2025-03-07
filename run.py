@@ -52,8 +52,8 @@ sharp_id = 956 #1449  #Set to -1 for it to figure this out on its own (can be sl
 use_synthetic = True   #Use the synthetic magnetograms from 'magnetograms' folder
 
 sharps_directory = '/extra/tmp/trcn27/sharps/'
-max_mags = 1000 #Maximum number of input magnetograms (won't convert all the import data)
-time_per_snap = 0.05  #Time units per input minute
+max_mags = 1000 #Maximum number of input magnetograms (won't convert all the import data if too many)
+time_per_snap = 0.05  #Time units per input minute (for the real ones. Synthetic is a bit baffling)
 
 mag_start = 0   #First magnetogram to start from
 envelope_factor = -1.0 #If positive, smoothly drops the input magnetogram to zero near the boundaries, at distance from 0 to 1 near the edge. Also adds some padding cells maybe.
@@ -65,9 +65,11 @@ check_data = dothings
 recalculate_inputs = dothings   #Redo the interpolation from the SHARP inputs onto this grid
 recalculate_init = dothings       #Recalculates the initial potential field
 recalculate_boundary = dothings  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
+
 use_existing_boundary = True  #If True, doesn't attempt to match helicity -- just uses existing boundary conditions from mf_mags (must exist, obviously)
 existing_boundary_num = 0 #Run number of such a boundary
 adapt_omega = False
+continue_time = 750.0 #Continue evolution after the last magnetogram. Negative if don't want any past the imported time.
 
 nx = 96
 
@@ -79,14 +81,14 @@ eta0 = 0.0
 
 tstart = 0.0
 
-ndiags = 1000
+ndiags = 750
 nplots = -1
 
 nu0 = 10.0
 eta = 5e-4*nu0
 #eta = 1.0
 
-x0 = -130.0; x1 = 130.0   #Keep this as 100, no matter what the domain size is. Because that seemed to work.
+x0 = -130.0; x1 = 130.0   #Keep this as 100, no matter what the domain size is. Because that seemed to work...
 y0 = -130.0; y1 = 130.0
 z0 = 0.0; z1 = 130.0
 
@@ -120,7 +122,7 @@ if decay_type == 2: #smooth tanh
 
 if decay_type == 3: #sharp tanh
     a = 0.25; b = 1.0
-    zstar = run*0.3*z1#0.1*(run)*z1
+    zstar = 0.1*(run-10)*z1
     deltaz = 0.02*z1
 
 #SOME FOLDER ADMIN
@@ -153,6 +155,7 @@ if os.path.isdir(data_directory) and mag_start == 0:
     for i in range(1000):
         if os.path.isfile('%s%04d.nc' % (data_directory, i)):
             os.remove('%s%04d.nc' % (data_directory, i))
+
 elif not os.path.isdir(data_directory):
     os.mkdir(data_directory)
 
@@ -230,17 +233,19 @@ if not use_synthetic:
     print('Importing SHARP data from number', sharp_id)
 
     import_nx, import_ny, start, end = sharp_info(sharp_id, sharps_directory)
-
 else:
-    sharp_id = 0; last_magnetogram_time = 250.0
+    sharp_id = 0
 
     mag_input_directory = './magnetograms/'
     print('Using synthetic magnetograms from folder ', mag_input_directory)
     #Test that they're all there...
     import_nx, import_ny, start, end = synthetic_info(sharp_id, mag_input_directory)
+
+    last_magnetogram_time = (end-1)*0.5
     raw_mag_times = np.linspace(0.0, last_magnetogram_time, end-start)/time_per_snap
     np.save('./parameters/raw_times%05d.npy' % sharp_id, raw_mag_times)
 
+#print('Raw mag times', raw_mag_times, end)
 print('Using raw data from ', start, ' to ', end)
 #Use the import ratios to establish the grid.
 #Resolutions will be based on the ratio of the imported data, based on the nx above
@@ -251,8 +256,6 @@ if aspect_init < 1.0:
     new_aspect = (aspect_init + padding_factor)/(1.0 + padding_factor)
 else:
     new_aspect = (1.0 + padding_factor)/(aspect_init + padding_factor)
-
-print(import_ny, import_nx, padding_factor, new_aspect)
 
 print('Zero padding factor', padding_factor, 'aspects', aspect_init, new_aspect)
 ny = int(nx*new_aspect)
@@ -283,7 +286,6 @@ if not use_synthetic:
         convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
 
     nmags = len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id))
-
 else:
     if os.path.exists(sharps_directory + '%05d_mag/' % sharp_id):
         if len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id)) > 1 and not recalculate_inputs:
@@ -299,21 +301,22 @@ else:
         convert_sharp(grid, sharp_id, mag_input_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
         nmags = len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id))
 
+
 if os.path.exists('./parameters/raw_times%05d.npy' % sharp_id):
     raw_mag_times = np.load('./parameters/raw_times%05d.npy' % sharp_id)
 else:
     raw_mag_times = np.linspace(0.0, last_magnetogram_time, nmags)
     np.save('./parameters/raw_times%05d.npy' % sharp_id, raw_mag_times)
 
-
-mag_times = np.load('./parameters/mag_times%05d.npy' % sharp_id)
-mag_times = (mag_times - mag_times[0])*time_per_snap
-tmax = mag_times[-1]
+mag_times = (raw_mag_times - raw_mag_times[0])*time_per_snap
+tmax = max(mag_times[-1], continue_time)
 
 nplots = nmags
 
+#print('Final Magnetogram times', mag_times)
 print(nmags, 'input magnetograms found')
 print('____________________________________________')
+
 
 #SAVE VARIABLES TO BE READ BY FORTRAN. THESE SHOULD BE CONSTANT ON A SINGLE RUN
 #-------------------------------------
@@ -353,7 +356,7 @@ variables[22] = hflag
 
 variables[23] = decay_type
 
-variables[24] = 0.0
+variables[24] = continue_time
 
 #Number of imported magnetograms
 variables[25] = nmags
@@ -416,6 +419,7 @@ print('Whitespace padding cells:', pad_cells)
 #If asked, check if existing boundary conditions match... If not, need to recalculate
 
 if use_existing_boundary:
+    print('Attempting to use existing boundary conditions. Checking these are fine...')
     #Check number of files in this folder, and for any missing
     for check in range(nmags-1):
         fname_check = './efields/%03d/%04d.nc' % (existing_boundary_num, check)
@@ -433,9 +437,10 @@ if use_existing_boundary:
 
     print('Existing boundary conditions imported from run  ', existing_boundary_num)
 
-if recalculate_boundary:
+if recalculate_boundary and not use_existing_boundary:
     #Calculates the boundary with ZERO twist to begin with
     compute_electrics_bounded(run, init_number, mag_root, mag_times, omega = 0.0, start = 0, end = nmags-1, initialise = True, plot = False, pad_cells = pad_cells)
+
 
 bx, by, bz = read_boundary('./inits/init%03d.nc' % init_number)
 
@@ -446,8 +451,8 @@ check = np.sqrt(np.abs(hsum))*np.sign(hsum)
 
 if mag_start != 0:
     halls = np.load('./hdata/halls%03d.npy' % run)
-    omegas = np.load('./hdata/omegas%03d.npy' % omegas)
-    tplots = np.load('./hdata/tplots%03d.npy' % tplots)
+    omegas = np.load('./hdata/omegas%03d.npy' % run)
+    tplots = np.load('./hdata/tplots%03d.npy' % run)
     halls[mag_start+1:] = 0.0
     omegas[mag_start+1:] = 0.0
     tplots[mag_start+1:] = 0.0
@@ -593,7 +598,26 @@ else:  #Just run with existing boundary conditions. Lovely.
     np.savetxt('parameters/variables%03d.txt' % run, variables)   #variables numbered based on run number (up to 1000)
 
     print('Running entire code with no helicity matching, using existing boundary and initial conditions...')
+    print('From boundaries', mag_start, 'to', nmags-1)
     if nprocs <= 4:
         os.system('/usr/lib64/openmpi/bin/mpiexec ffpe-summary=none -np %d ./bin/mf3d %d' % (nprocs, run))
     else:
         os.system('/usr/lib64/openmpi/bin/mpiexec -np %d --oversubscribe ./bin/mf3d %d' % (nprocs, run))
+
+#Check if continuing past the last magnetogram
+if continue_time > mag_times[-1]:
+    print('Continuing past the last magnetogram with a stationary boundary condition')
+    variables[29] = nmags-1
+    variables[30] = int(continue_time/mag_times[-1])*nmags
+
+    print(nmags, int(continue_time/mag_times[-1])*nmags)
+    np.savetxt('parameters/variables%03d.txt' % run, variables)   #variables numbered based on run number (up to 1000)
+
+    if nprocs <= 4:
+        os.system('/usr/lib64/openmpi/bin/mpiexec ffpe-summary=none -np %d ./bin/mf3d %d' % (nprocs, run))
+    else:
+        os.system('/usr/lib64/openmpi/bin/mpiexec -np %d --oversubscribe ./bin/mf3d %d' % (nprocs, run))
+
+
+
+

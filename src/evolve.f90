@@ -224,7 +224,7 @@ SUBROUTINE import_surface_electric(flow_number, dt_fact)
     INTEGER:: ncid, vid
     REAL(num):: dt_fact
 
-    if (flow_number < 499) then
+    if (flow_number < nmags - 1) then
         write (flow_id,'(I4.4)') flow_number
         write (run_id,'(I3.3)') init_number
 
@@ -244,7 +244,6 @@ SUBROUTINE import_surface_electric(flow_number, dt_fact)
 
         surf_ex = surf_ex*dt_fact
         surf_ey = surf_ey*dt_fact
-
     else
         surf_ex = 0.0_num
         surf_ey = 0.0_num
@@ -272,8 +271,13 @@ SUBROUTINE import_surface_magnetic(flow_number)
     write (flow_id,'(I4.4)') flow_number
     write (run_id,'(I3.3)') init_number
 
-    electric_filename = trim("./efields/"//trim(run_id)//'/'//trim(flow_id)//'.nc')
+    if (flow_number < nmags - 1) then
+        write (flow_id,'(I4.4)') flow_number
+    else
+        write (flow_id,'(I4.4)') nmags - 2
+    end if
 
+    electric_filename = trim("./efields/"//trim(run_id)//'/'//trim(flow_id)//'.nc')
     call try(nf90_open(trim(electric_filename), nf90_nowrite, ncid))
 
     call try(nf90_inq_varid(ncid, 'bx_0', vid))
@@ -293,7 +297,6 @@ SUBROUTINE import_surface_magnetic(flow_number)
     start = (/x_rank*nx+1,y_rank*ny+1/),count = (/nx+2,ny+1/)))
 
     call try(nf90_close(ncid))
-
 
 END SUBROUTINE import_surface_magnetic
 

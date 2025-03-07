@@ -23,8 +23,6 @@ PROGRAM main
     ! Import the parameters and set up the grid
     CALL initialise()
 
-    print*, 'timestep', dt
-
     if (.true.) then
     if (hamilton_flag < 0.5) then
         data_directory_root = '/extra/tmp/trcn27/mf3d/'
@@ -43,7 +41,9 @@ PROGRAM main
     !CALL update_surface_flows(0)
 
     if (proc_num == 0) print*, 'Set up, running from', mag_min, 'to', mag_max
-    if (proc_num == 0) print*, 'Times from', mag_times(mag_min), 'to', mag_times(mag_max)
+
+    if (mag_max > nmags .and. proc_num == 0) print*, 'Times from', mag_times(mag_min), 'to', mag_times(mag_max)
+    if (mag_max .ge. nmags .and. proc_num == 0) print*, 'Times from', mag_times(mag_min), 'to', mag_times(nmags-1)*(mag_max)/(nmags-1)
 
     if (mag_min == 0) then
         CALL timestep()  !Does everything except the actual timestep (for diagnostic reasons)
@@ -54,9 +54,16 @@ PROGRAM main
     !Calculate initial snapshot and diagnostic numbers -- don't have to line up with magnetograms
     first_diagnostic = .true.
     do block_num = mag_min, mag_max-1
-        tstart = mag_times(block_num) ; tend = mag_times(block_num+1)
+
+        if (block_num < nmags - 1) then
+            tstart = mag_times(block_num) ; tend = mag_times(block_num+1)
+        else
+            tstart = mag_times(nmags-1)*block_num/(nmags-1); tend = mag_times(nmags-1)*(block_num + 1)/(nmags-1)
+        end if
+
         CALL import_surface_electric(block_num, 1.0_num/(tend - tstart))
         CALL import_surface_magnetic(block_num)
+
         t = tstart
         block_dt = (tend-tstart)/(int((tend-tstart)/dt) + 1)
         nt = int((tend-tstart)/block_dt)
@@ -72,7 +79,9 @@ PROGRAM main
             mag_ratio = (float(n) + 0.5_num)/nt
             CALL timestep()  !Does everything except the actual timestep (for diagnostic reasons)
             !Check whether diagnostics or a snapshot is necessary
-            if (t - block_dt < diag_ideal_time .and. t .ge. diag_ideal_time) then
+
+            if (t - block_dt < diag_ideal_time .and. t .ge. diag_ideal_time - 1d-6) then
+
                 CALL diagnostics(diag_num, first_diagnostic)
                 diag_num = diag_num + 1
                 diag_ideal_time = diag_num*tmax/ndiags
@@ -91,7 +100,8 @@ PROGRAM main
         CALL export_magnetogram(block_num+1)
         CALL save_snap(block_num+1)
 
-        if (t - block_dt < diag_ideal_time .and. t .ge. diag_ideal_time) then
+        if (t - block_dt < diag_ideal_time .and. t .ge. diag_ideal_time - 1d-6) then
+
             CALL diagnostics(diag_num, first_diagnostic)
             diag_num = diag_num + 1
             diag_ideal_time = diag_num*tmax/ndiags

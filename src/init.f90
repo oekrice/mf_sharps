@@ -99,6 +99,8 @@ SUBROUTINE read_parameters()
     hamilton_flag = int(variables(22))
     decay_type = int(variables(23))
 
+    continue_time = variables(24)
+
     nmags = int(variables(25))
 
     init_number = int(variables(27))

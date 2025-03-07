@@ -21,7 +21,7 @@ root1 = './hdata/'  #For new tests
 cs = ['red', 'blue', 'green']
 
 fig,axs = plt.subplots(2, figsize = (fig_width, fig_width*0.7))
-runs = [0,1]
+runs = [0,1,2]
 
 cs = plt.cm.plasma(np.linspace(0.1,0.9,len(runs)))
 
@@ -31,8 +31,8 @@ for ri, run in enumerate(runs):
         omegas = np.load(root1 + 'omegas%03d.npy' % run)
         tplots = np.load(root1 + 'tplots%03d.npy' % run)
         end = np.sum(np.abs(h_all) > 0) - 1
-        axs[0].plot(tplots[:end], h_all[:end], c = cs[ri])
-        axs[1].plot(tplots[:end], omegas[:end], c = cs[ri])
+        axs[0].plot(tplots[:end], h_all[:end])
+        axs[1].plot(tplots[:end], omegas[:end])
     except:
         pass
 

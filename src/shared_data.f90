@@ -114,7 +114,8 @@ MODULE shared_data
     !Lbound magfield
     REAL(num), DIMENSION(:,:), ALLOCATABLE:: surf_bx0, surf_bx1, surf_by0, surf_by1
     REAL(num), DIMENSION(:,:), ALLOCATABLE:: surf_bx, surf_by
-    REAL(num):: mag_ratio
+    REAL(num):: mag_ratio, continue_time
+
 
 !*******************************************************************************
 END MODULE shared_data

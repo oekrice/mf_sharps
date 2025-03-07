@@ -92,7 +92,7 @@ class Fltrace():
         self.ds = 0.05 #Tracing 'timestep' as a proportion of the grid size
         self.weakness_limit = 1e-5  #Minimum field strength to stop plotting
         self.line_plot_length = 100  #To save time while plotting, reduce the length of the plotted lines
-        self.nlines = 10000#1000000#200000
+        self.nlines = 100000#1000000#200000
 
         #Import bz as a test of the resolutions (and for the pyvista plot)
         self.nx = np.shape(self.bz)[0]
@@ -225,8 +225,11 @@ class Fltrace():
         ax.set_aspect('equal')
         ax.set_title('Lower boundary magnetogram')
 
-        plt.suptitle('t = %03d' % mag_times[self.snap])
-        plt.savefig('fancies/fancy%03d.png' % self.snap)
+        if self.snap < len(mag_times):
+            plt.suptitle('t = %03d' % mag_times[self.snap])
+        else:
+            plt.suptitle('t = %03d' % (mag_times[-1]*self.snap/len(mag_times)))
+        plt.savefig('fancies/fancy%04d.png' % self.snap)
         if self.show:
             plt.show()
         plt.close()
@@ -374,7 +377,7 @@ nset = 1 #Number of concurrent runs. Receives input 0-(nset-1)
 
 #snap_min = 0
 #snap_max = 94
-skip = 10
+skip = 20
 
 if True:
     for run in range(run, run+1):
