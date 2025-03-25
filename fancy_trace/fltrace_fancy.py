@@ -182,25 +182,29 @@ class Fltrace():
         zsplot = np.linspace(self.z0,self.z1,self.xsum.shape[1]+1)
 
         #fig, axs = plt.subplots(4,1, figsize = (15,7.5))
-        fig = plt.figure(layout = 'constrained', figsize = (10,7.5))
+        fig = plt.figure(figsize = (10,7.5))
 
         toplots = [np.sqrt(self.zsum), np.sqrt(self.ysum), np.sqrt(self.xsum)]
         ranges = [[xsplot, ysplot], [xsplot, zsplot],[ysplot, zsplot]]
         titles = ['Top', 'x face', 'y face']
 
-        gs0 = gridspec.GridSpec(3,1,figure=  fig)
+        gs0 = gridspec.GridSpec(4,2,figure=  fig)
 
 
         for i in range(3):
-
+            ''''
             if i == 0:
-                gs1 = gridspec.GridSpecFromSubplotSpec(1,2, subplot_spec=gs0[0])
+                gs1 = gridspec.GridSpecFromSubplotSpec(1,2, subplot_spec=gs0[0:2])
                 ax = fig.add_subplot(gs1[0])
 
             else:
-                gs2 = gridspec.GridSpecFromSubplotSpec(1,1, subplot_spec=gs0[i])
+                gs2 = gridspec.GridSpecFromSubplotSpec(1,2, subplot_spec=gs0[2:4])
                 ax = fig.add_subplot(gs2[0])
-
+            '''
+            if i == 0:
+                ax = fig.add_subplot(gs0[0:2,0])
+            else:
+                ax = fig.add_subplot(gs0[2:4,i-1])
             toplot = toplots[i]
 
             #Top down
@@ -219,12 +223,13 @@ class Fltrace():
 
 
         #Then magnetogram
-        ax = fig.add_subplot(gs1[1])
+        ax = fig.add_subplot(gs0[0:2,1])
         toplot = self.bz[:,:,0].T
         ax.pcolormesh(self.xs, self.ys, toplot,cmap ='seismic', vmax = np.max(np.abs(toplot)), vmin = -np.max(np.abs(toplot)))
         ax.set_aspect('equal')
         ax.set_title('Lower boundary magnetogram')
 
+        plt.tight_layout()
         if self.snap < len(mag_times):
             plt.suptitle('t = %03d' % mag_times[self.snap])
         else:
@@ -311,7 +316,7 @@ class Fltrace():
 
 def determine_scales(snap_min, snap_max):
 
-    allscales = []
+    allscales = np.zeros((snap_max,3))
     for snap in range(snap_min, snap_max):
         try:
             data = netcdf_file('./fl_data/emiss%04d.nc' % snap, 'r', mmap=False)
@@ -335,13 +340,11 @@ def determine_scales(snap_min, snap_max):
 
                 scale.append(vmax)
 
-            allscales.append(scale)
+            allscales[snap,:] = scale
             print('Snap', snap, 'scales', scale)
         except:
-            allscales.append(allscales[-1]) #Assume it's just the last one...
-            pass
+            allscales[snap] = allscales[snap-1]
 
-    allscales = np.array(allscales)
     for i in range(3):
         allscales[:,i] = gaussian_filter(allscales[:,i],10)
 
@@ -377,7 +380,7 @@ nset = 1 #Number of concurrent runs. Receives input 0-(nset-1)
 
 #snap_min = 0
 #snap_max = 94
-skip = 20
+skip = 1
 
 if True:
     for run in range(run, run+1):
@@ -392,10 +395,10 @@ if True:
 
         #snap_min = snap_min + nset
 
-if False:
+if True:
     #Redo with nicer scales...
     allscales = determine_scales(snap_min, snap_max)
-    for snap in range(snap_min, min(len(allscales), snap_max)):
+    for snap in range(snap_min, snap_max, skip):
         fltrace = Fltrace(run = run, snap = snap, show = show)
 
         fltrace.plot_emiss(snap = snap, allscales = allscales)

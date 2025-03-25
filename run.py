@@ -49,34 +49,39 @@ except:
     winflag = 1
 
 sharp_id = 956 #1449  #Set to -1 for it to figure this out on its own (can be slow)
-use_synthetic = True   #Use the synthetic magnetograms from 'magnetograms' folder
+use_synthetic = False   #Use the synthetic magnetograms from 'magnetograms' folder. If not will look for a SHARP with the above ID.
 
 sharps_directory = '/extra/tmp/trcn27/sharps/'
 max_mags = 1000 #Maximum number of input magnetograms (won't convert all the import data if too many)
-time_per_snap = 0.05  #Time units per input minute (for the real ones. Synthetic is a bit baffling)
+time_per_snap = 0.05  #Time units per input minute (for the real ones. Synthetic is a bit baffling but seems to work)
 
-mag_start = 0   #First magnetogram to start from
-envelope_factor = -1.0 #If positive, smoothly drops the input magnetogram to zero near the boundaries, at distance from 0 to 1 near the edge. Also adds some padding cells maybe.
+mag_start = 0   #First magnetogram to start from. To use if the run has been interrupted but will otherwise need to be zero.
+envelope_factor = -1.0 #This should no longer do anything, but keep it negative just in case it does.
 padding_factor = 0.25 #Adds a given padding distance to the x,y dimensions to allow the electric fields to match there. 0 Does nothing.
 
 normalise_inputs = True       #If True, will normalise all the magnetic fields such that the max radial component is 1. Also adresses flux balance.
-dothings = False
+dothings = True   #Do the below things
 check_data = dothings
 recalculate_inputs = dothings   #Redo the interpolation from the SHARP inputs onto this grid
 recalculate_init = dothings       #Recalculates the initial potential field
 recalculate_boundary = dothings  #Recalculates the initial boundary conditions (zero-Omega) and the reference helicity
 
-use_existing_boundary = True  #If True, doesn't attempt to match helicity -- just uses existing boundary conditions from mf_mags (must exist, obviously)
+use_existing_boundary = False  #If True, doesn't attempt to match helicity -- just uses existing boundary conditions from mf_mags (must exist, obviously)
 existing_boundary_num = 0 #Run number of such a boundary
-adapt_omega = False
-continue_time = 750.0 #Continue evolution after the last magnetogram. Negative if don't want any past the imported time.
+adapt_omega = True      #Set to true to adapt omega (doesn't do this is use_existing_boundary is on)
+constant_omega_value = 0.0   #If not adapting omega, it will use this value.
 
-nx = 96
+if use_synthetic:
+    continue_time = 750.0 #Continue evolution after the last magnetogram. Negative if don't want any past the imported time.
+else:
+    continue_time = -1
+
+nx = 128   #Resolution. Other dimensions will follow automatically to make things cubular.
 
 #DYNAMIC SYSTEM PARAMETERS
 #-------------------------------------
 voutfact = -1.0   #Outflow speed. If negative, will go for as much as possible without instabilities
-shearfact = 0.0#3.7e-5   #factor by which to change the imported 'speed'
+shearfact = 0.0   #3.7e-5   #factor by which to change the imported 'speed'
 eta0 = 0.0
 
 tstart = 0.0
@@ -84,7 +89,7 @@ tstart = 0.0
 ndiags = 750
 nplots = -1
 
-nu0 = 10.0
+nu0 = 2.5
 eta = 5e-4*nu0
 #eta = 1.0
 
@@ -97,7 +102,7 @@ if use_existing_boundary:
 else:
     init_number = run
 
-omega = 0.0
+omega = constant_omega_value  #If adapt-Omega isn't flagged this is the value which will be used. Maybe.
 
 #Variables for the pressure term
 decay_type = 3  #Decay types -- 0 for none, 1 for exponential, 2/3 for tanh. Same as the 2D cases.
@@ -122,7 +127,7 @@ if decay_type == 2: #smooth tanh
 
 if decay_type == 3: #sharp tanh
     a = 0.25; b = 1.0
-    zstar = 0.1*(run-10)*z1
+    zstar = 0.1*z1
     deltaz = 0.02*z1
 
 #SOME FOLDER ADMIN
@@ -364,7 +369,7 @@ variables[26] = tstart
 
 variables[27] = init_number #Code to give the magnetograms and electric fields so they don't need to be done every time'
 
-variables[28] = omega   #Just for plotting and things. Not used in the Fortran
+variables[28] = omega   #Just for plotting and things. Not used in the Fortran.
 
 np.savetxt('parameters/variables%03d.txt' % run, variables)   #variables numbered based on run number (up to 1000)
 np.savetxt('parameters/magtimes%03d.txt' % run, mag_times)   #variables numbered based on run number (up to 1000)
@@ -472,12 +477,15 @@ hrefs = np.load('./hdata/h_ref.npy').tolist()
 
 nmags_per_run = 1    #How many magnetic field INTERVALS to run for a given magnetofrictional chunk, with constant omega in each case
 
-if not use_existing_boundary and adapt_omega:
+if not use_existing_boundary:
     for block_start in range(mag_start, nmags-1, nmags_per_run):#nmags-1, nmags_per_run):
 
         if block_start > 0:
             omega = omegas[block_start-1]
         block_end = min(block_start + nmags_per_run, nmags-1)
+
+        if not adapt_omega:
+            omega = constant_omega_value
 
         xs = []; ys = []  #For the function interpolation
 
@@ -610,7 +618,6 @@ if continue_time > mag_times[-1]:
     variables[29] = nmags-1
     variables[30] = int(continue_time/mag_times[-1])*nmags
 
-    print(nmags, int(continue_time/mag_times[-1])*nmags)
     np.savetxt('parameters/variables%03d.txt' % run, variables)   #variables numbered based on run number (up to 1000)
 
     if nprocs <= 4:

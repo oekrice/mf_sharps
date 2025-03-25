@@ -62,11 +62,7 @@ def compute_inplane_helicity(grid, bx, by, bz, plot = False, envelope_factor = -
         freqlist1db =np.roll(np.linspace(-ncells[1]/2,ncells[1]/2-1,ncells[1]),round(ncells[1]/2))/(ncells[1]*spacing[1])
         return np.array([np.array([np.array([2.0*np.pi*freqlist1da[i],2.0*np.pi*freqlist1db[j]]) for j in range(len(freqlist1db))]) for i  in range(len(freqlist1da))]);
 
-    #def curla(ax, ay, az):
-        #Outputs the curl of a (which is averaged to grid points so a bit messy)
-
-    #Find in -plane vector potential in the winding gauge
-
+    #Find in-plane vector potential in the winding gauge
     fm = getFrequencyMatrix([bz0.shape[0], bz0.shape[1]],[grid.dx, grid.dy]);
     # make the basis
 
