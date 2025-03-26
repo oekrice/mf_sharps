@@ -15,29 +15,20 @@ PROGRAM main
     INTEGER:: block_num, diag_num
     REAL(num):: tmags, block_dt, tstart, tend, diag_ideal_time
     LOGICAL:: first_diagnostic
+    CHARACTER(LEN = 4):: run_id
     !REAL(num):: mag_interval
     ! Put some of the major variables in here - things that can be changed occasionally but not in a series of runs
     cfl  = 0.1
     mf_delta = 1D-3
 
     ! Import the parameters and set up the grid
+
+    data_directory_root = '/extra/tmp/mf3d/'
     CALL initialise()
 
-    if (.true.) then
-    if (hamilton_flag < 0.5) then
-        data_directory_root = '/extra/tmp/trcn27/mf3d/'
-    else
-        data_directory_root = '/nobackup/trcn27/mf3d0/'
-    end if
+    write (run_id,'(I3.3)') int(run_number)
 
-    if (run_number < 10) then
-        write (data_directory, "(A23,A2,I1,A1)") data_directory_root, '00',int(run_number), "/"
-    else if (run_number < 100) then
-        write (data_directory, "(A23,A1,I2,A1)") data_directory_root, '0', int(run_number), "/"
-    else
-        write (data_directory, "(A23,I3,A1)") data_directory_root, int(run_number), "/"
-    end if
-
+    data_directory = trim(data_directory_root//'/'//trim(run_id)//'/')
     !CALL update_surface_flows(0)
 
     if (proc_num == 0) print*, 'Set up, running from', mag_min, 'to', mag_max
@@ -121,7 +112,6 @@ PROGRAM main
     if (proc_num == -1) print*, 'Step', n, 'at time', t
 
     !CALL diagnostics(ndiags-1)
-    end if
     !if (proc_num == 0 .and. mag_max == 500) print*, 'Fortran code completed sucessfully. Carry on.'
     CALL mpi_finalize(ierr)
     STOP

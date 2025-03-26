@@ -48,10 +48,10 @@ except:
     hflag = 0
     winflag = 1
 
-sharp_id = 956 #1449  #Set to -1 for it to figure this out on its own (can be slow)
-use_synthetic = True   #Use the synthetic magnetograms from 'magnetograms' folder. If not will look for a SHARP with the above ID.
+sharp_id = 956 #1449  #Set to -1 for it to figure this out on its own from the region ID (can be slow)
+use_synthetic = False   #Use the synthetic magnetograms from 'magnetograms' folder. If not will look for a SHARP with the above ID.
 
-sharps_directory = '/extra/tmp/trcn27/sharps/'
+sharps_directory = '/extra/tmp/sharps/'
 max_mags = 1000 #Maximum number of input magnetograms (won't convert all the import data if too many)
 time_per_snap = 0.05  #Time units per input minute (for the real ones. Synthetic is a bit baffling but seems to work)
 
@@ -60,7 +60,7 @@ envelope_factor = -1.0 #This should no longer do anything, but keep it negative 
 padding_factor = 0.25 #Adds a given padding distance to the x,y dimensions to allow the electric fields to match there. 0 Does nothing.
 
 normalise_inputs = True       #If True, will normalise all the magnetic fields such that the max radial component is 1. Also adresses flux balance.
-dothings = True   #Do the below things. Not necessary if you're using the same boundary conditions but different pressure, etc.
+dothings = False   #Do the below things. Not necessary if you're using the same boundary conditions but different pressure, etc.
 check_data = dothings
 recalculate_inputs = dothings   #Redo the interpolation from the SHARP inputs onto this grid
 recalculate_init = dothings       #Recalculates the initial potential field
@@ -134,9 +134,9 @@ if decay_type == 3: #sharp tanh
 #-------------------------------------
 
 if not hflag:
-    data_directory = '/extra/tmp/trcn27/mf3d/%03d/' % run
+    data_directory = '/extra/tmp/mf3d/%03d/' % run
 else:
-    data_directory = '/nobackup/trcn27/mf3d0/%03d/' % run
+    data_directory = '/nobackup/mf3d0/%03d/' % run
 
 if winflag:
     data_directory = '/Data/'
@@ -209,7 +209,7 @@ if not use_synthetic:
 
     if check_data or not os.path.exists(sharps_directory + '%05d_raw/' % sharp_id):
         if not os.path.exists(sharps_directory + '%05d_raw/' % sharp_id):
-            print('No data exists. Will attempt to download...')
+            print('No data exists for this active region. Will attempt to download it...')
             obtain_sharp(sharp_id, sharps_directory, plot_flag = True)
         else:
             print('Some raw sharp data found. Checking if this is everything...')
@@ -574,7 +574,7 @@ if not use_existing_boundary:
                 np.save('./hdata/tplots%03d.npy' % run, tplots)
 
             else:   #not close enough, make a better estimate
-                print('Helicity match good enough, tried omegas = ',  xs)
+                print('Helicity match not good enough, tried omegas = ',  xs)
                 if len(xs) == 1:
                     if check > target and omega > minomega:
                         omega = omega - omega_range/10

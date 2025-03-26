@@ -37,8 +37,6 @@ def obtain_sharp(sharpnum, fname_root, plot_flag = 0, files = []):
 
     email = 'oliver.e.rice@durham.ac.uk'
 
-    input_folder = './Data/'
-
     c = drms.Client(email=email) #Use your own email address.
     times, k = c.query('%s[%d]' % (series, sharpnum), seg = segments, key = kwlist)   #What does this do?!
 
@@ -70,14 +68,11 @@ def obtain_sharp(sharpnum, fname_root, plot_flag = 0, files = []):
             fname = fname_root + '%05d_%05d.nc' % (sharpnum, fi)
             files.append(fname)
 
-    for fname in files:
+    for fi, fname in enumerate(files):
 
         #Check if file exists, and skip if so. If data is corrupted will sort out later
         if os.path.exists(fname):
             pass
-
-        if plot_flag:
-            fig, axs = plt.subplots(3)
 
         #Save out as netcdf
 
@@ -106,13 +101,6 @@ def obtain_sharp(sharpnum, fname_root, plot_flag = 0, files = []):
             vid = fid.createVariable(segments[i], 'd', ('xs','ys'))
             vid[:] = data
 
-            if plot_flag:
-
-                ax = axs[i]
-                ax.imshow(data)
-
         fid.close()
-
-        plt.savefig('/extra/tmp/trcn27/sharps/plots/%05d_%05d.png' % (sharpnum, fi))
-
-        plt.close()
+        pc = fi/len(files)
+        print('Downloaded file', fname, '(', int(pc*100), '%)', end='\r')

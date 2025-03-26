@@ -180,10 +180,11 @@ SUBROUTINE establish_grid()
     if (mag_min == 0) then
         init_filename = trim('./inits/init'//trim(init_id)//'.nc')
     else
-        init_filename = trim('/extra/tmp/trcn27/mf3d/'//trim(run_id)//'/'//trim(mag_id)//'.nc')
+        init_filename = trim(trim(data_directory_root)//trim(run_id)//'/'//trim(mag_id)//'.nc')
     end if
 
-    if (proc_num == -1) print*, 'Init filename:  ', init_filename
+
+    if (proc_num == -1) print*, run_id, mag_id, 'Init filename:  ', init_filename
     call try(nf90_open(trim(init_filename), nf90_nowrite, ncid))
 
     call try(nf90_inq_varid(ncid, 'ax', vid))

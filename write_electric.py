@@ -621,7 +621,7 @@ class compute_electrics_bounded():
             trefs.append(mag_times[snap+1])
 
         print('                                                                            ')
-        print('Electric fields', start, ' to ', end, ' calculated and saved.', envelope_factor)
+        print('Electric fields', start, ' to ', end, ' calculated and saved.')
 
         if initialise:
             np.save('./hdata/h_ref.npy', np.array(hrefs))
