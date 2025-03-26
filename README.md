@@ -9,5 +9,17 @@ Steps to install and run:
 Clone this repo into your place of choice:
 
 ```
-git clone 
+git clone https://github.com/oekrice/mf_sharps.git
 ```
+
+which should download everything. I'd recommend doing this rather than copying directly as there are lots of files dotted around. This will also download the sample magnetograms (around 100MB I think). 
+
+Check the Makefile works by running:
+
+```
+make clean
+make
+```
+
+If not, then you'll need to open the Makefile and change the lines at the top for wherever your respective MPI and netcdf files are located (currently set up for local maths machine).
+
