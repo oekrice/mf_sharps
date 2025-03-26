@@ -49,9 +49,11 @@ except:
     winflag = 1
 
 sharp_id = 956 #1449  #Set to -1 for it to figure this out on its own from the region ID (can be slow)
-use_synthetic = False   #Use the synthetic magnetograms from 'magnetograms' folder. If not will look for a SHARP with the above ID.
+use_synthetic = True   #Use the synthetic magnetograms from 'magnetograms' folder. If not will look for a SHARP with the above ID.
 
 sharps_directory = '/extra/tmp/sharps/'
+data_directory = '/extra/tmp/mf3d/%03d/' % run
+
 max_mags = 1000 #Maximum number of input magnetograms (won't convert all the import data if too many)
 time_per_snap = 0.05  #Time units per input minute (for the real ones. Synthetic is a bit baffling but seems to work)
 
@@ -60,7 +62,7 @@ envelope_factor = -1.0 #This should no longer do anything, but keep it negative 
 padding_factor = 0.25 #Adds a given padding distance to the x,y dimensions to allow the electric fields to match there. 0 Does nothing.
 
 normalise_inputs = True       #If True, will normalise all the magnetic fields such that the max radial component is 1. Also adresses flux balance.
-dothings = False   #Do the below things. Not necessary if you're using the same boundary conditions but different pressure, etc.
+dothings = True   #Do the below things. Not necessary if you're using the same boundary conditions but different pressure, etc.
 check_data = dothings
 recalculate_inputs = dothings   #Redo the interpolation from the SHARP inputs onto this grid
 recalculate_init = dothings       #Recalculates the initial potential field
@@ -133,11 +135,6 @@ if decay_type == 3: #sharp tanh
 #SOME FOLDER ADMIN
 #-------------------------------------
 
-if not hflag:
-    data_directory = '/extra/tmp/mf3d/%03d/' % run
-else:
-    data_directory = '/nobackup/mf3d0/%03d/' % run
-
 if winflag:
     data_directory = '/Data/'
     
@@ -155,6 +152,10 @@ if not os.path.isdir('./hdata'):
 
 if not os.path.isdir(data_directory[:-4]):
     os.mkdir(data_directory[:-4])
+
+if not os.path.isdir(sharps_directory):
+    os.mkdir(sharps_directory)
+
 
 if os.path.isdir(data_directory) and mag_start == 0:
     for i in range(1000):
@@ -284,11 +285,11 @@ if not use_synthetic:
             print('Importing existing converted magnetic field...')
         else:
             print('Converting raw SHARPS onto this grid')
-            convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
+            convert_sharp(grid, sharp_id, sharps_directory, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
 
     else:
         print('Converting raw SHARPS onto this grid')
-        convert_sharp(grid, sharp_id, sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
+        convert_sharp(grid, sharp_id, sharps_directory,sharps_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
 
     nmags = len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id))
 else:
@@ -299,11 +300,11 @@ else:
 
         else:
             print('Converting synthetic magnetograms to the correct resolution etc.')
-            convert_sharp(grid, sharp_id, mag_input_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
+            convert_sharp(grid, sharp_id, sharps_directory, mag_input_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
             nmags = len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id))
     else:
         print('Converting synthetic magnetograms to the correct resolution etc.')
-        convert_sharp(grid, sharp_id, mag_input_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
+        convert_sharp(grid, sharp_id, sharps_directory, mag_input_directory, start=start, end=end, max_mags = max_mags, plot = False, normalise = normalise_inputs, envelope_factor = envelope_factor, padding_factor = padding_factor)
         nmags = len(os.listdir(sharps_directory + '%05d_mag/' % sharp_id))
 
 
@@ -522,7 +523,7 @@ if not use_existing_boundary:
 
             np.savetxt('parameters/variables%03d.txt' % run, variables)   #variables numbered based on run number (up to 1000)
 
-            #print('Using output directory "%s"' % (data_directory))
+
             if nprocs <= 4:
                 os.system('/usr/lib64/openmpi/bin/mpiexec ffpe-summary=none -np %d ./bin/mf3d %d' % (nprocs, run))
             else:
@@ -607,6 +608,7 @@ else:  #Just run with existing boundary conditions. Lovely.
 
     print('Running entire code with no helicity matching, using existing boundary and initial conditions...')
     print('From boundaries', mag_start, 'to', nmags-1)
+
     if nprocs <= 4:
         os.system('/usr/lib64/openmpi/bin/mpiexec ffpe-summary=none -np %d ./bin/mf3d %d' % (nprocs, run))
     else:

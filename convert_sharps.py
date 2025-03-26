@@ -96,7 +96,6 @@ def synthetic_info(sharp_id, root_fname):
         except:
             break
 
-
     return bz.shape[0], bz.shape[1], start, end + 1
 
 def balance_flux(field):
@@ -126,19 +125,21 @@ def balance_flux(field):
     return np.array(fieldplus + fieldminus)
 
 #Want to import this as a function so just do it like that
-def convert_sharp(grid, sharp_id, root_fname, start = 0, end = 1, max_mags = 10000, plot = False, normalise = False, envelope_factor = -1, padding_factor = 0):
+def convert_sharp(grid, sharp_id, sharp_root, root_fname, start = 0, end = 1, max_mags = 10000, plot = False, normalise = False, envelope_factor = -1, padding_factor = 0):
     #Imports the grid data, sharp id and the start and end frames to plot
     #Generally will be a mess at the start and end, so ignore those bits.
     #for import_number in range(start, end):
+
     if sharp_id > 0:
         output_dir = root_fname + '%05d_mag/' % sharp_id
     else:
-        output_dir = '/extra/tmp/trcn27/sharps/' + '%05d_mag/' % sharp_id
+        output_dir = sharp_root + '%05d_mag/' % sharp_id
 
     if sharp_id > 0:
         print('Converting raw data from SHARP', sharp_id)
         raw_directory = root_fname + '%05d_raw/' % sharp_id
     else:
+        print('Converting data from synthetic input')
         raw_directory = root_fname
 
     if os.path.exists(output_dir):
