@@ -17,7 +17,7 @@ root1 = './hdata/'  #For new tests
 cs = ['red', 'blue', 'green']
 
 fig,axs = plt.subplots(2, figsize = (fig_width, fig_width*0.7))
-runs = [50,51,70]
+runs = [31,32,33,34,35,36,37]
 
 cs = plt.cm.plasma(np.linspace(0.1,0.9,len(runs)))
 
@@ -32,6 +32,7 @@ for ri, run in enumerate(runs):
     except:
         pass
 
+    print(h_all)
 t_ref = np.load(root1 + 't_ref.npy')
 h_ref = np.load(root1 + 'h_ref.npy')
 

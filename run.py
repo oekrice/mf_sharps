@@ -49,18 +49,18 @@ except:
     winflag = 1
 
 sharp_id = 956 #1449  #Set to -1 for it to figure this out on its own (can be slow)
-use_synthetic = False   #Use the synthetic magnetograms from 'magnetograms' folder. If not will look for a SHARP with the above ID.
+use_synthetic = True   #Use the synthetic magnetograms from 'magnetograms' folder. If not will look for a SHARP with the above ID.
 
 sharps_directory = '/extra/tmp/trcn27/sharps/'
 max_mags = 1000 #Maximum number of input magnetograms (won't convert all the import data if too many)
 time_per_snap = 0.05  #Time units per input minute (for the real ones. Synthetic is a bit baffling but seems to work)
 
-mag_start = 0   #First magnetogram to start from. To use if the run has been interrupted but will otherwise need to be zero.
+mag_start = 400   #First magnetogram to start from. To use if the run has been interrupted but will otherwise need to be zero.
 envelope_factor = -1.0 #This should no longer do anything, but keep it negative just in case it does.
 padding_factor = 0.25 #Adds a given padding distance to the x,y dimensions to allow the electric fields to match there. 0 Does nothing.
 
 normalise_inputs = True       #If True, will normalise all the magnetic fields such that the max radial component is 1. Also adresses flux balance.
-dothings = True   #Do the below things
+dothings = False   #Do the below things. Not necessary if you're using the same boundary conditions but different pressure, etc.
 check_data = dothings
 recalculate_inputs = dothings   #Redo the interpolation from the SHARP inputs onto this grid
 recalculate_init = dothings       #Recalculates the initial potential field
@@ -68,28 +68,29 @@ recalculate_boundary = dothings  #Recalculates the initial boundary conditions (
 
 use_existing_boundary = False  #If True, doesn't attempt to match helicity -- just uses existing boundary conditions from mf_mags (must exist, obviously)
 existing_boundary_num = 0 #Run number of such a boundary
-adapt_omega = True      #Set to true to adapt omega (doesn't do this is use_existing_boundary is on)
-constant_omega_value = 0.0   #If not adapting omega, it will use this value.
+adapt_omega = False      #Set to true to adapt omega (doesn't do this is use_existing_boundary is on)
+omegas = [1e-4,5e-4,1e-3,5e-3,1e-2,5e-2,1e-1]
+constant_omega_value = omegas[run - 31]  #If not adapting omega, it will use this value.
 
 if use_synthetic:
-    continue_time = 750.0 #Continue evolution after the last magnetogram. Negative if don't want any past the imported time.
+    continue_time = 500.0 #Continue evolution after the last magnetogram. Negative if don't want any past the imported time.
 else:
     continue_time = -1
 
-nx = 128   #Resolution. Other dimensions will follow automatically to make things cubular.
+nx = 96   #Resolution. Other dimensions will follow automatically to make things cubular.
 
 #DYNAMIC SYSTEM PARAMETERS
 #-------------------------------------
 voutfact = -1.0   #Outflow speed. If negative, will go for as much as possible without instabilities
-shearfact = 0.0   #3.7e-5   #factor by which to change the imported 'speed'
+shearfact = 0.0   #3.7e-5   #factor by which to change the imported 'speed'. No longer does anything, hopefully.
 eta0 = 0.0
 
 tstart = 0.0
 
-ndiags = 750
+ndiags = 500
 nplots = -1
 
-nu0 = 2.5
+nu0 = 10.0
 eta = 5e-4*nu0
 #eta = 1.0
 
@@ -105,7 +106,7 @@ else:
 omega = constant_omega_value  #If adapt-Omega isn't flagged this is the value which will be used. Maybe.
 
 #Variables for the pressure term
-decay_type = 3  #Decay types -- 0 for none, 1 for exponential, 2/3 for tanh. Same as the 2D cases.
+decay_type = 0  #Decay types -- 0 for none, 1 for exponential, 2/3 for tanh. Same as the 2D cases.
 
 if decay_type == 0: #No pressure
     zstar = 0.0; a = 0.0; b = 0.0; deltaz = 0.0
@@ -547,7 +548,7 @@ if not use_existing_boundary:
 
             xs.append(omega); ys.append(check - target)
 
-            if abs(check - target) < 1e-1:   #Close enough
+            if abs(check - target) < 1e-1 or not adapt_omega:   #Close enough
                 go = False
                 print('Helicity match good enough, omega = ',  omega)
                 #Update helicities
