@@ -8,6 +8,6 @@ Steps to install and run:
 
 Clone this repo into your place of choice:
 
-'''
+```
 git clone 
-'''
+```
