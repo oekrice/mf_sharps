@@ -51,6 +51,8 @@ Outputs will be saved as netcdfs to the file specified above. Basic diagnostics 
 
 ```
 python helicity_adapt.py
+```
+```
 python diagnostics_new.py
 ```
 
