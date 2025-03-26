@@ -32,27 +32,16 @@ if len(sys.argv) > 2:
 else:
     nprocs = 1
 
-if len(sys.argv) > 3:
-    region_id = int(sys.argv[3])
-else:
-    region_id = 11318
+hflag = 0
+winflag = 0
 
-try:
-    if os.uname()[1] == 'brillouin.dur.ac.uk':
-        hflag = 0
-        winflag = 0
-    else:
-        hflag = 1
-        winflag = 0
-except:
-    hflag = 0
-    winflag = 1
-
+region_id = 11318
 sharp_id = 956 #1449  #Set to -1 for it to figure this out on its own from the region ID (can be slow)
 use_synthetic = True   #Use the synthetic magnetograms from 'magnetograms' folder. If not will look for a SHARP with the above ID.
 
 sharps_directory = '/extra/tmp/sharps/'
 data_directory = '/extra/tmp/mf3d/%03d/' % run
+mpi_root = '/usr/lib64/openmpi/bin/mpiexec'
 
 max_mags = 1000 #Maximum number of input magnetograms (won't convert all the import data if too many)
 time_per_snap = 0.05  #Time units per input minute (for the real ones. Synthetic is a bit baffling but seems to work)
@@ -62,7 +51,7 @@ envelope_factor = -1.0 #This should no longer do anything, but keep it negative 
 padding_factor = 0.25 #Adds a given padding distance to the x,y dimensions to allow the electric fields to match there. 0 Does nothing.
 
 normalise_inputs = True       #If True, will normalise all the magnetic fields such that the max radial component is 1. Also adresses flux balance.
-dothings = True   #Do the below things. Not necessary if you're using the same boundary conditions but different pressure, etc.
+dothings = True  #Do the below things. Not necessary if you're using the same boundary conditions but different pressure, etc.
 check_data = dothings
 recalculate_inputs = dothings   #Redo the interpolation from the SHARP inputs onto this grid
 recalculate_init = dothings       #Recalculates the initial potential field
@@ -70,6 +59,7 @@ recalculate_boundary = dothings  #Recalculates the initial boundary conditions (
 
 use_existing_boundary = False  #If True, doesn't attempt to match helicity -- just uses existing boundary conditions from mf_mags (must exist, obviously)
 existing_boundary_num = 0 #Run number of such a boundary
+
 adapt_omega = True      #Set to true to adapt omega (doesn't do this is use_existing_boundary is on)
 constant_omega_value = 0.0 #If not adapting omega, it will use this value.
 
@@ -78,10 +68,11 @@ if use_synthetic:
 else:
     continue_time = -1
 
-nx = 96   #Resolution. Other dimensions will follow automatically to make things cubular.
 
 #DYNAMIC SYSTEM PARAMETERS
 #-------------------------------------
+nx = 96   #Resolution. Other dimensions will follow automatically to make things cubular.
+
 voutfact = -1.0   #Outflow speed. If negative, will go for as much as possible without instabilities
 shearfact = 0.0   #3.7e-5   #factor by which to change the imported 'speed'. No longer does anything, hopefully.
 eta0 = 0.0
@@ -155,7 +146,6 @@ if not os.path.isdir(data_directory[:-4]):
 
 if not os.path.isdir(sharps_directory):
     os.mkdir(sharps_directory)
-
 
 if os.path.isdir(data_directory) and mag_start == 0:
     for i in range(1000):
@@ -525,9 +515,9 @@ if not use_existing_boundary:
 
 
             if nprocs <= 4:
-                os.system('/usr/lib64/openmpi/bin/mpiexec ffpe-summary=none -np %d ./bin/mf3d %d' % (nprocs, run))
+                os.system('%s -np %d ./bin/mf3d %d' % (mpi_root, nprocs, run))
             else:
-                os.system('/usr/lib64/openmpi/bin/mpiexec -np %d --oversubscribe ./bin/mf3d %d' % (nprocs, run))
+                os.system('%s -np %d --oversubscribe ./bin/mf3d %d' % (mpi_root, nprocs, run))
 
             #Check helicity against reference
 
@@ -610,9 +600,9 @@ else:  #Just run with existing boundary conditions. Lovely.
     print('From boundaries', mag_start, 'to', nmags-1)
 
     if nprocs <= 4:
-        os.system('/usr/lib64/openmpi/bin/mpiexec ffpe-summary=none -np %d ./bin/mf3d %d' % (nprocs, run))
+        os.system('%s -np %d ./bin/mf3d %d' % (mpi_root, nprocs, run))
     else:
-        os.system('/usr/lib64/openmpi/bin/mpiexec -np %d --oversubscribe ./bin/mf3d %d' % (nprocs, run))
+        os.system('%s -np %d --oversubscribe ./bin/mf3d %d' % (mpi_root, nprocs, run))
 
 #Check if continuing past the last magnetogram
 if continue_time > mag_times[-1]:
@@ -623,9 +613,9 @@ if continue_time > mag_times[-1]:
     np.savetxt('parameters/variables%03d.txt' % run, variables)   #variables numbered based on run number (up to 1000)
 
     if nprocs <= 4:
-        os.system('/usr/lib64/openmpi/bin/mpiexec ffpe-summary=none -np %d ./bin/mf3d %d' % (nprocs, run))
+        os.system('%s -np %d ./bin/mf3d %d' % (mpi_root, nprocs, run))
     else:
-        os.system('/usr/lib64/openmpi/bin/mpiexec -np %d --oversubscribe ./bin/mf3d %d' % (nprocs, run))
+        os.system('%s -np %d --oversubscribe ./bin/mf3d %d' % (mpi_root, nprocs, run))
 
 
 
