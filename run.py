@@ -42,6 +42,19 @@ use_synthetic = True   #Use the synthetic magnetograms from 'magnetograms' folde
 sharps_directory = '/extra/tmp/sharps/'
 data_directory = '/extra/tmp/mf3d/%03d/' % run
 mpi_root = '/usr/lib64/openmpi/bin/mpiexec'
+mag_input_directory = './magnetograms/'
+
+print('___________________________________________')
+print('                                           ')
+
+
+print('Running with ID', run, 'on', nprocs, 'cores')
+if use_synthetic:
+    print('Using synthetic boundary data from folder', mag_input_directory)
+else:
+    print('Using SHARP boundary data in temporary location', sharps_directory)
+
+
 
 max_mags = 1000 #Maximum number of input magnetograms (won't convert all the import data if too many)
 time_per_snap = 0.05  #Time units per input minute (for the real ones. Synthetic is a bit baffling but seems to work)
@@ -67,6 +80,16 @@ if use_synthetic:
     continue_time = 750.0 #Continue evolution after the last magnetogram. Negative if don't want any past the imported time.
 else:
     continue_time = -1
+
+if adapt_omega:
+    print('Set up to adapt Omega to match helicity')
+else:
+    print('Using constant Omega = ', constant_omega_value)
+
+print('                                           ')
+print('___________________________________________')
+
+time.sleep(2.0)
 
 
 #DYNAMIC SYSTEM PARAMETERS
@@ -232,8 +255,7 @@ if not use_synthetic:
 else:
     sharp_id = 0
 
-    mag_input_directory = './magnetograms/'
-    print('Using synthetic magnetograms from folder ', mag_input_directory)
+    #print('Using synthetic magnetograms from folder ', mag_input_directory)
     #Test that they're all there...
     import_nx, import_ny, start, end = synthetic_info(sharp_id, mag_input_directory)
 
